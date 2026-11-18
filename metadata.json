@@ -1,0 +1,6 @@
+{
+  "name": "Kotatsu",
+  "description": "Leitor moderno de mangás e quadrinhos em Jetpack Compose com catálogo online integrado, arquivos locais CBZ, favoritos por categorias, histórico e marcadores.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
