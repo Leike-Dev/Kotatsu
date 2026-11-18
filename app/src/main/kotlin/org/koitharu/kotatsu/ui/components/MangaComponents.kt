@@ -1013,7 +1013,8 @@ fun CategorySelectBottomSheet(
     initialSelectedIds: Set<Long>,
     onDismiss: () -> Unit,
     onSaveSelection: (Set<Long>) -> Unit,
-    onCreateCategory: (String) -> Unit
+    onCreateCategory: (String) -> Unit,
+    showRemoveAction: Boolean = true
 ) {
     var selectedIds by remember(initialSelectedIds) { mutableStateOf(initialSelectedIds) }
     var newCategoryName by remember { mutableStateOf("") }
@@ -1136,7 +1137,7 @@ fun CategorySelectBottomSheet(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                if (initialSelectedIds.isNotEmpty()) {
+                if (showRemoveAction && initialSelectedIds.isNotEmpty()) {
                     OutlinedButton(
                         onClick = { onSaveSelection(emptySet()) },
                         shapes = ButtonDefaults.shapes(),
@@ -1150,6 +1151,7 @@ fun CategorySelectBottomSheet(
                 }
                 Button(
                     onClick = { onSaveSelection(selectedIds) },
+                    enabled = selectedIds.isNotEmpty(),
                     shapes = ButtonDefaults.shapes(),
                     modifier = Modifier
                         .weight(1f)

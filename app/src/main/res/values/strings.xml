@@ -148,6 +148,8 @@
     <string name="favorites_batch_categories_saved">Categorias atualizadas para %1$d obras.</string>
     <string name="favorites_batch_caught_up_done">%1$d obras marcadas como em dia.</string>
     <string name="favorites_batch_removed_done">%1$d obras removidas da estante.</string>
+    <string name="batch_remove_confirm_title">Remover obras selecionadas?</string>
+    <string name="batch_remove_confirm_body">Deseja remover %1$d obras selecionadas da sua estante de favoritos? Seu histórico de leitura será mantido.</string>
 
     <!-- Histórico -->
     <string name="clear_history">Limpar</string>
@@ -164,6 +166,7 @@
     <string name="bookmarks_empty_title">Nenhum marcador salvo</string>
     <string name="bookmarks_empty_subtitle">Durante a leitura, toque no ícone de marcador no topo da tela para guardar suas cenas e páginas favoritas.</string>
     <string name="remove_bookmark">Remover marcador</string>
+    <string name="bookmark_page_badge_format">Pág. %1$d</string>
 
     <!-- Tela de Detalhes do Mangá -->
     <string name="start_reading">Começar leitura</string>
@@ -307,6 +310,8 @@
     <string name="reset_default">Restaurar padrão</string>
     <string name="browser_extract_pages">Ler no leitor</string>
     <string name="browser_save_source">Salvar site</string>
+    <string name="browser_site_saved_format">Site \"%1$s\" salvo nas suas Fontes!</string>
+    <string name="browser_no_pages_detected">Nenhuma página de capítulo detectada nesta tela.</string>
     <string name="browser_shield_stealth_status">Camuflagem anti-adblock • %1$d neutralizados</string>
     <string name="browser_shield_active_status">Escudo ativo • %1$d bloqueados</string>
     <string name="browser_shield_off_status">Escudo desativado</string>

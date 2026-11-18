@@ -560,8 +560,9 @@ fun ReaderScreen(
         }
 
         // Top M3 Expressive Floating Pill HUD
+        val forceShowTopHud = uiState.isLoading || uiState.errorMessage != null || uiState.pages.isEmpty()
         AnimatedVisibility(
-            visible = hudVisible,
+            visible = hudVisible || forceShowTopHud,
             enter = fadeIn() + slideInVertically { -it },
             exit = fadeOut() + slideOutVertically { -it },
             modifier = Modifier
@@ -605,18 +606,22 @@ fun ReaderScreen(
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = uiState.manga?.title.orEmpty(),
+                            text = uiState.manga?.title?.ifBlank { null }
+                                ?: stringResource(R.string.app_name),
                             style = MaterialTheme.typography.titleSmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Text(
-                            text = uiState.currentChapter?.displayTitle.orEmpty(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = palette.hudContent.copy(alpha = 0.8f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        val subTitle = uiState.currentChapter?.displayTitle.orEmpty()
+                        if (subTitle.isNotBlank()) {
+                            Text(
+                                text = subTitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.hudContent.copy(alpha = 0.8f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
 
                     if (uiState.chapters.size > 1) {

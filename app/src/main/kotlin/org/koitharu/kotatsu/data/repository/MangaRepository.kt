@@ -367,6 +367,8 @@ class MangaRepository(
         localCbzRepository.deleteLocalFiles(manga.localPath)
         dao.clearCategoriesForManga(manga.id)
         dao.deleteHistoryForManga(manga.id)
+        dao.unmarkAllChaptersForManga(manga.id)
+        dao.deleteBookmarksForManga(manga.id)
         dao.deleteMangaById(manga.id)
         memoryMangaCache.remove(manga.id)
         memoryChaptersCache.remove(manga.id)

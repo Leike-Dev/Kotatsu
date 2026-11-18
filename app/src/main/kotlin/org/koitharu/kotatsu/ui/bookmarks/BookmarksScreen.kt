@@ -145,7 +145,10 @@ fun BookmarksScreen(
                                         .padding(6.dp)
                                 ) {
                                     Text(
-                                        text = "Pág. ${bookmark.pageIndex + 1}",
+                                        text = stringResource(
+                                            R.string.bookmark_page_badge_format,
+                                            bookmark.pageIndex + 1
+                                        ),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onTertiary,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)

@@ -93,8 +93,17 @@ class ReaderViewModel(
             val prefs = repository.preferencesRepository.preferencesFlow.first()
             runCatching {
                 val manga = repository.getMangaDetails(mangaId, sourceType)
-                val chapters = repository.getChapters(manga, prefs.preferredLanguage)
-                    .ifEmpty { repository.getChapters(manga, LanguageFilter.ALL) }
+                val chapters = repository.getChapters(
+                    manga = manga,
+                    language = prefs.preferredLanguage,
+                    recordInspection = true
+                ).ifEmpty {
+                    repository.getChapters(
+                        manga = manga,
+                        language = LanguageFilter.ALL,
+                        recordInspection = true
+                    )
+                }
                 val activeChapter = chapters.firstOrNull { it.id == chapterId }
                     ?: chapters.firstOrNull()
                     ?: ChapterItem(

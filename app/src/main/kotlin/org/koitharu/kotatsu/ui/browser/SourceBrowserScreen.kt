@@ -70,6 +70,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -93,6 +94,7 @@ fun SourceBrowserScreen(
     onOpenExtractedChapter: (mangaId: String, sourceTypeName: String, chapterId: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val prefs by repository.preferencesRepository.preferencesFlow
         .collectAsStateWithLifecycle(initialValue = AppPreferences())
     val latestPrefs by rememberUpdatedState(prefs)
@@ -278,7 +280,6 @@ fun SourceBrowserScreen(
                             settings.apply {
                                 javaScriptEnabled = true
                                 domStorageEnabled = true
-                                databaseEnabled = true
                                 loadsImagesAutomatically = true
                                 mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
                                 userAgentString = latestPrefs.customUserAgent
@@ -440,7 +441,8 @@ fun SourceBrowserScreen(
                         onClick = {
                             val parsed = Uri.parse(currentUrl)
                             val host = parsed.host.orEmpty().removePrefix("www.")
-                            val origin = "${parsed.scheme ?: "https"}://${parsed.host.orEmpty()}"
+                            val authority = parsed.authority.orEmpty().ifBlank { parsed.host.orEmpty() }
+                            val origin = "${parsed.scheme ?: "https"}://$authority"
                             if (host.isNotBlank()) {
                                 scope.launch {
                                     val siteName = host.substringBefore(".")
@@ -450,7 +452,9 @@ fun SourceBrowserScreen(
                                         baseUrl = origin,
                                         searchTemplate = "$origin/?s={query}"
                                     )
-                                    snackbarHostState.showSnackbar("Site \"$siteName\" salvo nas suas Fontes!")
+                                    snackbarHostState.showSnackbar(
+                                        context.getString(R.string.browser_site_saved_format, siteName)
+                                    )
                                 }
                             }
                         },
@@ -493,7 +497,7 @@ fun SourceBrowserScreen(
                                         )
                                     } else {
                                         snackbarHostState.showSnackbar(
-                                            "Nenhuma página de capítulo detectada nesta tela."
+                                            context.getString(R.string.browser_no_pages_detected)
                                         )
                                     }
                                 }

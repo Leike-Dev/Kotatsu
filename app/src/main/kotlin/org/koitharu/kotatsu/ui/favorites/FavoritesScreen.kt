@@ -138,6 +138,7 @@ fun FavoritesScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var showManageSheet by remember { mutableStateOf(false) }
     var showBatchCategorySheet by remember { mutableStateOf(false) }
+    var showBatchRemoveConfirm by remember { mutableStateOf(false) }
     var categoryToRename by remember { mutableStateOf<FavoriteCategory?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -650,7 +651,11 @@ fun FavoritesScreen(
                     }
 
                     IconButton(
-                        onClick = viewModel::removeSelectedFromShelf,
+                        onClick = {
+                            if (selectedMangaIds.isNotEmpty()) {
+                                showBatchRemoveConfirm = true
+                            }
+                        },
                         enabled = selectedMangaIds.isNotEmpty(),
                         modifier = Modifier.testTag("batch_remove_button")
                     ) {
@@ -679,12 +684,40 @@ fun FavoritesScreen(
         CategorySelectBottomSheet(
             categories = categories,
             initialSelectedIds = selectedCategoryId?.let { setOf(it) } ?: emptySet(),
+            showRemoveAction = false,
             onDismiss = { showBatchCategorySheet = false },
             onSaveSelection = { chosenIds ->
                 viewModel.applyBatchCategories(chosenIds)
                 showBatchCategorySheet = false
             },
             onCreateCategory = viewModel::createCategory
+        )
+    }
+
+    if (showBatchRemoveConfirm) {
+        val count = selectedMangaIds.size
+        AlertDialog(
+            onDismissRequest = { showBatchRemoveConfirm = false },
+            shape = MaterialTheme.shapes.extraLarge,
+            title = { Text(stringResource(R.string.batch_remove_confirm_title)) },
+            text = { Text(stringResource(R.string.batch_remove_confirm_body, count)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.removeSelectedFromShelf()
+                        showBatchRemoveConfirm = false
+                    },
+                    shapes = ButtonDefaults.shapes(),
+                    modifier = Modifier.testTag("confirm_batch_remove_button")
+                ) {
+                    Text(stringResource(R.string.batch_remove_shelf))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatchRemoveConfirm = false }) {
+                    Text(stringResource(R.string.cancel_action))
+                }
+            }
         )
     }
 

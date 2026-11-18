@@ -246,6 +246,9 @@ interface KotatsuDao {
     @Query("DELETE FROM page_bookmarks WHERE id = :bookmarkId")
     suspend fun deleteBookmarkById(bookmarkId: Long)
 
+    @Query("DELETE FROM page_bookmarks WHERE mangaId = :mangaId")
+    suspend fun deleteBookmarksForManga(mangaId: String)
+
     // Custom External Sources
     @Query("SELECT * FROM custom_sources ORDER BY createdAt DESC")
     fun observeCustomSources(): Flow<List<CustomSourceEntity>>

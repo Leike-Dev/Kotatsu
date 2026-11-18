@@ -35,11 +35,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.DoneAll
-import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -388,7 +388,7 @@ private fun ReaderHeroOverviewCard(
                         modifier = Modifier.weight(1f)
                     )
                     StatKpiTile(
-                        icon = Icons.Outlined.MenuBook,
+                        icon = Icons.AutoMirrored.Outlined.MenuBook,
                         value = analytics.estimatedPagesRead.toString(),
                         label = stringResource(R.string.stats_pages_read),
                         modifier = Modifier.weight(1f)

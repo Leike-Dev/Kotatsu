@@ -44,6 +44,13 @@ android {
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
+        test.java.srcDirs += 'src/test/kotlin'
+    }
+
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+        }
     }
 
     compileOptions {
@@ -95,5 +102,12 @@ dependencies {
     implementation libs.coil.network.okhttp
 
     debugImplementation libs.androidx.ui.tooling
+    debugImplementation libs.androidx.compose.ui.test.manifest
+
+    testImplementation platform(libs.androidx.compose.bom)
     testImplementation libs.junit
+    testImplementation libs.robolectric
+    testImplementation libs.androidx.test.core
+    testImplementation libs.kotlinx.coroutines.test
+    testImplementation libs.androidx.compose.ui.test.junit4
 }

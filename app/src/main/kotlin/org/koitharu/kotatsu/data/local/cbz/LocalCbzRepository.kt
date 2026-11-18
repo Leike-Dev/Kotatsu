@@ -178,7 +178,8 @@ class LocalCbzRepository(private val context: Context) {
             coverUrl = coverUri,
             status = "local",
             tags = listOf(MangaTag("local_cbz", "CBZ Offline")),
-            localPath = targetDir.absolutePath
+            localPath = targetDir.absolutePath,
+            knownChaptersCount = chaptersCount
         )
     }
 

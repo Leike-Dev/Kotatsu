@@ -25,7 +25,10 @@ private val Context.kotatsuDataStore: DataStore<Preferences> by preferencesDataS
     name = "kotatsu_preferences"
 )
 
-class UserPreferencesRepository(private val context: Context) {
+class UserPreferencesRepository(
+    private val dataStore: DataStore<Preferences>
+) {
+    constructor(context: Context) : this(context.kotatsuDataStore)
 
     private object Keys {
         val THEME_MODE = stringPreferencesKey("theme_mode")
@@ -73,7 +76,7 @@ class UserPreferencesRepository(private val context: Context) {
         val LEGACY_DB_IMPORTED = booleanPreferencesKey("legacy_kotatsu_db_imported")
     }
 
-    val preferencesFlow: Flow<AppPreferences> = context.kotatsuDataStore.data.map { prefs ->
+    val preferencesFlow: Flow<AppPreferences> = dataStore.data.map { prefs ->
         AppPreferences(
             themeMode = prefs[Keys.THEME_MODE]
                 ?.let { runCatching { AppThemeMode.valueOf(it) }.getOrNull() }
@@ -137,155 +140,155 @@ class UserPreferencesRepository(private val context: Context) {
     }
 
     suspend fun isLegacyDbImported(): Boolean =
-        context.kotatsuDataStore.data.first()[Keys.LEGACY_DB_IMPORTED] ?: false
+        dataStore.data.first()[Keys.LEGACY_DB_IMPORTED] ?: false
 
     suspend fun markLegacyDbImported() {
-        context.kotatsuDataStore.edit { it[Keys.LEGACY_DB_IMPORTED] = true }
+        dataStore.edit { it[Keys.LEGACY_DB_IMPORTED] = true }
     }
 
     suspend fun setThemeMode(mode: AppThemeMode) {
-        context.kotatsuDataStore.edit { it[Keys.THEME_MODE] = mode.name }
+        dataStore.edit { it[Keys.THEME_MODE] = mode.name }
     }
 
     suspend fun setAmoledDark(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.AMOLED_DARK] = enabled }
+        dataStore.edit { it[Keys.AMOLED_DARK] = enabled }
     }
 
     suspend fun setDynamicColors(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.DYNAMIC_COLORS] = enabled }
+        dataStore.edit { it[Keys.DYNAMIC_COLORS] = enabled }
     }
 
     suspend fun setShowSourceBadges(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.SHOW_SOURCE_BADGES] = enabled }
+        dataStore.edit { it[Keys.SHOW_SOURCE_BADGES] = enabled }
     }
 
     suspend fun setExploreLayoutMode(mode: ExploreLayoutMode) {
-        context.kotatsuDataStore.edit { it[Keys.EXPLORE_LAYOUT] = mode.name }
+        dataStore.edit { it[Keys.EXPLORE_LAYOUT] = mode.name }
     }
 
     suspend fun setShowExploreSpotlight(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.SHOW_EXPLORE_SPOTLIGHT] = enabled }
+        dataStore.edit { it[Keys.SHOW_EXPLORE_SPOTLIGHT] = enabled }
     }
 
     suspend fun setShowExploreSourcesBar(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.SHOW_EXPLORE_SOURCES] = enabled }
+        dataStore.edit { it[Keys.SHOW_EXPLORE_SOURCES] = enabled }
     }
 
     suspend fun setShowExploreGenres(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.SHOW_EXPLORE_GENRES] = enabled }
+        dataStore.edit { it[Keys.SHOW_EXPLORE_GENRES] = enabled }
     }
 
     suspend fun setShowExploreLocalSection(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.SHOW_EXPLORE_LOCAL] = enabled }
+        dataStore.edit { it[Keys.SHOW_EXPLORE_LOCAL] = enabled }
     }
 
     suspend fun setEnableKitsuCatalog(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.ENABLE_KITSU] = enabled }
+        dataStore.edit { it[Keys.ENABLE_KITSU] = enabled }
     }
 
     suspend fun setHideNsfw(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.HIDE_NSFW] = enabled }
+        dataStore.edit { it[Keys.HIDE_NSFW] = enabled }
     }
 
     suspend fun setPreferredLanguage(language: LanguageFilter) {
-        context.kotatsuDataStore.edit { it[Keys.LANGUAGE] = language.name }
+        dataStore.edit { it[Keys.LANGUAGE] = language.name }
     }
 
     suspend fun setChapterDisplayMode(mode: ChapterDisplayMode) {
-        context.kotatsuDataStore.edit { it[Keys.CHAPTER_DISPLAY_MODE] = mode.name }
+        dataStore.edit { it[Keys.CHAPTER_DISPLAY_MODE] = mode.name }
     }
 
     suspend fun setDefaultReaderMode(mode: ReaderMode) {
-        context.kotatsuDataStore.edit { it[Keys.READER_MODE] = mode.name }
+        dataStore.edit { it[Keys.READER_MODE] = mode.name }
     }
 
     suspend fun setReaderScaleMode(mode: ReaderScaleMode) {
-        context.kotatsuDataStore.edit { it[Keys.READER_SCALE] = mode.name }
+        dataStore.edit { it[Keys.READER_SCALE] = mode.name }
     }
 
     suspend fun setReaderBackground(background: ReaderBackground) {
-        context.kotatsuDataStore.edit { it[Keys.READER_BG] = background.name }
+        dataStore.edit { it[Keys.READER_BG] = background.name }
     }
 
     suspend fun setKeepScreenOn(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.KEEP_SCREEN_ON] = enabled }
+        dataStore.edit { it[Keys.KEEP_SCREEN_ON] = enabled }
     }
 
     suspend fun setVolumeKeysNavigation(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.VOLUME_KEYS_NAV] = enabled }
+        dataStore.edit { it[Keys.VOLUME_KEYS_NAV] = enabled }
     }
 
     suspend fun setPageTransitions(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.PAGE_TRANSITIONS] = enabled }
+        dataStore.edit { it[Keys.PAGE_TRANSITIONS] = enabled }
     }
 
     suspend fun setShowReaderThumbnails(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.SHOW_READER_THUMBNAILS] = enabled }
+        dataStore.edit { it[Keys.SHOW_READER_THUMBNAILS] = enabled }
     }
 
     suspend fun setShowReaderMiniInfo(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.SHOW_READER_MINI_INFO] = enabled }
+        dataStore.edit { it[Keys.SHOW_READER_MINI_INFO] = enabled }
     }
 
     suspend fun setWebtoonSeamlessGap(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.WEBTOON_SEAMLESS_GAP] = enabled }
+        dataStore.edit { it[Keys.WEBTOON_SEAMLESS_GAP] = enabled }
     }
 
     suspend fun setReaderBrightnessDim(dim: Float) {
-        context.kotatsuDataStore.edit { it[Keys.READER_BRIGHTNESS_DIM] = dim.coerceIn(0f, 0.65f) }
+        dataStore.edit { it[Keys.READER_BRIGHTNESS_DIM] = dim.coerceIn(0f, 0.65f) }
     }
 
     suspend fun setReaderGrayscale(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.READER_GRAYSCALE] = enabled }
+        dataStore.edit { it[Keys.READER_GRAYSCALE] = enabled }
     }
 
     suspend fun setReaderInvertColors(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.READER_INVERT] = enabled }
+        dataStore.edit { it[Keys.READER_INVERT] = enabled }
     }
 
     suspend fun setDataSaver(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.DATA_SAVER] = enabled }
+        dataStore.edit { it[Keys.DATA_SAVER] = enabled }
     }
 
     suspend fun setAdShieldEnabled(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.AD_SHIELD] = enabled }
+        dataStore.edit { it[Keys.AD_SHIELD] = enabled }
     }
 
     suspend fun setAntiAdblockBypass(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.ANTI_ADBLOCK_BYPASS] = enabled }
+        dataStore.edit { it[Keys.ANTI_ADBLOCK_BYPASS] = enabled }
     }
 
     suspend fun setBlockPopupsRedirects(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.BLOCK_POPUPS] = enabled }
+        dataStore.edit { it[Keys.BLOCK_POPUPS] = enabled }
     }
 
     suspend fun setDohProvider(provider: DohProvider) {
-        context.kotatsuDataStore.edit { it[Keys.DOH_PROVIDER] = provider.name }
+        dataStore.edit { it[Keys.DOH_PROVIDER] = provider.name }
     }
 
     suspend fun setCustomUserAgent(userAgent: String) {
-        context.kotatsuDataStore.edit {
+        dataStore.edit {
             it[Keys.CUSTOM_UA] = userAgent.trim().ifBlank { AppPreferences.DEFAULT_BROWSER_UA }
         }
     }
 
     suspend fun configureAppLock(enabled: Boolean, pin: String) {
-        context.kotatsuDataStore.edit {
+        dataStore.edit {
             it[Keys.APP_LOCK_ENABLED] = enabled && pin.length == 4
             it[Keys.APP_LOCK_PIN] = if (enabled) pin else ""
         }
     }
 
     suspend fun setAppLockSystemCredential(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.APP_LOCK_SYSTEM_CRED] = enabled }
+        dataStore.edit { it[Keys.APP_LOCK_SYSTEM_CRED] = enabled }
     }
 
     suspend fun setSecureScreenEnabled(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.SECURE_SCREEN] = enabled }
+        dataStore.edit { it[Keys.SECURE_SCREEN] = enabled }
     }
 
     suspend fun setIncognitoMode(enabled: Boolean) {
-        context.kotatsuDataStore.edit { it[Keys.INCOGNITO_MODE] = enabled }
+        dataStore.edit { it[Keys.INCOGNITO_MODE] = enabled }
     }
 
     suspend fun exportSimpleMap(): Map<String, String> {
@@ -327,7 +330,7 @@ class UserPreferencesRepository(private val context: Context) {
     }
 
     suspend fun restoreFromSimpleMap(map: Map<String, String>) {
-        context.kotatsuDataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             map["themeMode"]?.let { runCatching { AppThemeMode.valueOf(it) }.getOrNull() }
                 ?.let { prefs[Keys.THEME_MODE] = it.name }
             map["amoledDark"]?.toBooleanStrictOrNull()?.let { prefs[Keys.AMOLED_DARK] = it }

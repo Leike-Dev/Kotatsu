@@ -179,15 +179,35 @@ fun MangaDetailsScreen(
                     uiState.filteredChapters(completedChapterIds)
                 }
 
-                val primaryTargetChapter = remember(uiState.chapters, historyEntry) {
-                    val histId = historyEntry?.chapterId
-                    uiState.chapters.firstOrNull { it.id == histId } ?: uiState.chapters.firstOrNull()
+                val (primaryTargetChapter, primaryTargetPage) = remember(
+                    uiState.chapters,
+                    historyEntry,
+                    completedChapterIds
+                ) {
+                    val chapters = uiState.chapters
+                    val hist = historyEntry
+                    if (hist != null) {
+                        val histIdx = chapters.indexOfFirst { it.id == hist.chapterId }
+                        val finishedHistChapter = hist.chapterId in completedChapterIds &&
+                            hist.currentPage >= (hist.totalPages - 1).coerceAtLeast(0)
+                        when {
+                            histIdx >= 0 && finishedHistChapter && (histIdx + 1) in chapters.indices ->
+                                chapters[histIdx + 1] to 0
+                            histIdx >= 0 ->
+                                chapters[histIdx] to hist.currentPage
+                            else -> {
+                                val nextUnread = chapters.firstOrNull { it.id !in completedChapterIds }
+                                    ?: chapters.firstOrNull()
+                                nextUnread to 0
+                            }
+                        }
+                    } else {
+                        val firstUnread = chapters.firstOrNull { it.id !in completedChapterIds }
+                            ?: chapters.firstOrNull()
+                        firstUnread to 0
+                    }
                 }
-                val primaryTargetPage = if (historyEntry?.chapterId == primaryTargetChapter?.id) {
-                    historyEntry?.currentPage ?: 0
-                } else {
-                    0
-                }
+                val hasStartedAnyChapter = historyEntry != null || completedChapterIds.isNotEmpty()
 
                 fun shareManga() {
                     val shareText = buildString {
@@ -233,7 +253,7 @@ fun MangaDetailsScreen(
                                 MangaHeroSummarySection(
                                     manga = manga,
                                     isFavorited = assignedCategoryIds.isNotEmpty(),
-                                    historyEntry = historyEntry,
+                                    hasStartedAnyChapter = hasStartedAnyChapter,
                                     primaryChapter = primaryTargetChapter,
                                     synopsisExpanded = synopsisExpanded,
                                     onCoverClick = { if (manga.coverUrl.isNotBlank()) showCoverPreview = true },
@@ -369,7 +389,7 @@ fun MangaDetailsScreen(
                                         MangaHeroSummarySection(
                                             manga = manga,
                                             isFavorited = assignedCategoryIds.isNotEmpty(),
-                                            historyEntry = historyEntry,
+                                            hasStartedAnyChapter = hasStartedAnyChapter,
                                             primaryChapter = primaryTargetChapter,
                                             synopsisExpanded = synopsisExpanded,
                                             onCoverClick = { if (manga.coverUrl.isNotBlank()) showCoverPreview = true },
@@ -517,7 +537,7 @@ private fun TopDetailsActionBar(
 private fun MangaHeroSummarySection(
     manga: MangaItem,
     isFavorited: Boolean,
-    historyEntry: ReadingHistoryEntity?,
+    hasStartedAnyChapter: Boolean,
     primaryChapter: ChapterItem?,
     synopsisExpanded: Boolean,
     onCoverClick: () -> Unit,
@@ -632,7 +652,7 @@ private fun MangaHeroSummarySection(
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
-            val label = if (historyEntry != null && primaryChapter != null) {
+            val label = if (hasStartedAnyChapter && primaryChapter != null) {
                 stringResource(
                     R.string.continue_chapter_format,
                     primaryChapter.numberLabel.ifBlank { "1" }
@@ -1147,7 +1167,7 @@ private fun ChapterRowItem(
                 }
             }
 
-            if (isCurrentHistoryChapter && historyEntry != null) {
+            if (isCurrentHistoryChapter) {
                 Surface(
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primary
@@ -1278,7 +1298,7 @@ private fun ChapterDetailedCardItem(
                 }
             }
 
-            if (isCurrent && historyEntry != null && historyEntry.totalPages > 0) {
+            if (isCurrent && historyEntry.totalPages > 0) {
                 Spacer(modifier = Modifier.height(8.dp))
                 LinearProgressIndicator(
                     progress = {
