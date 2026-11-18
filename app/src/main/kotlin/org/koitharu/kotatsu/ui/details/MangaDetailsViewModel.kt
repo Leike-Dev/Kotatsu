@@ -133,6 +133,19 @@ class MangaDetailsViewModel(
         }
     }
 
+    fun setAllChaptersRead(markRead: Boolean) {
+        val currentManga = _uiState.value.manga ?: return
+        val currentChapters = _uiState.value.chapters
+        if (currentChapters.isEmpty()) return
+        viewModelScope.launch {
+            if (markRead) {
+                repository.markAllChaptersCompleted(currentManga, currentChapters)
+            } else {
+                repository.unmarkAllChaptersCompleted(currentManga.id)
+            }
+        }
+    }
+
     private suspend fun loadChapters(
         manga: MangaItem,
         language: LanguageFilter,
@@ -140,10 +153,20 @@ class MangaDetailsViewModel(
     ) {
         _uiState.update { it.copy(isChaptersLoading = true) }
         runCatching {
-            repository.getChapters(manga, language, forceRefresh)
+            repository.getChapters(
+                manga = manga,
+                language = language,
+                forceRefresh = forceRefresh,
+                recordInspection = true
+            )
         }.onSuccess { list ->
-            _uiState.update {
-                it.copy(
+            _uiState.update { state ->
+                val updatedManga = state.manga?.copy(
+                    knownChaptersCount = maxOf(state.manga.knownChaptersCount, list.size),
+                    newChaptersDelta = 0
+                )
+                state.copy(
+                    manga = updatedManga,
                     chapters = list,
                     isChaptersLoading = false
                 )

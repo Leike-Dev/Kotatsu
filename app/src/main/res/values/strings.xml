@@ -36,6 +36,11 @@
         <item quantity="other">%d obras</item>
     </plurals>
 
+    <plurals name="selected_works_count">
+        <item quantity="one">%d selecionada</item>
+        <item quantity="other">%d selecionadas</item>
+    </plurals>
+
     <!-- Aba Descobrir e Fontes Externas -->
     <string name="featured_spotlight_badge">DESTAQUE</string>
     <string name="read_spotlight_cta">Ver obra</string>
@@ -113,6 +118,36 @@
     <string name="select_categories_sheet_title">Categorias da obra</string>
     <string name="remove_from_favorites">Remover da estante</string>
     <string name="new_category_quick_button">Nova</string>
+    <string name="favorites_search_placeholder">Buscar na estante por título, autor ou gênero…</string>
+    <string name="favorites_search_toggle_desc">Pesquisar na estante</string>
+    <string name="favorites_check_updates">Atualizar</string>
+    <string name="favorites_check_updates_desc">Verificar novos capítulos nos favoritos</string>
+    <string name="favorites_checking_progress">Verificando capítulos nas fontes (%1$d de %2$d)…</string>
+    <string name="favorites_select_mode_desc">Seleção múltipla de obras</string>
+    <string name="favorites_filter_all">Todas</string>
+    <string name="favorites_filter_new">Novidades</string>
+    <string name="favorites_filter_unread">Não lidos</string>
+    <string name="favorites_filter_reading">Em leitura</string>
+    <string name="favorites_filter_caught_up">Em dia</string>
+    <string name="favorites_sort_added">Adicionados</string>
+    <string name="favorites_sort_last_read">Última leitura</string>
+    <string name="favorites_sort_alpha">A–Z</string>
+    <string name="favorites_sort_unread">Mais pendentes</string>
+    <string name="favorites_filter_empty_title">Nenhuma obra encontrada com esses filtros</string>
+    <string name="favorites_filter_empty_sub">Limpe a busca ou alterne os filtros rápidos para ver o restante da sua estante.</string>
+    <string name="favorites_clear_filters">Limpar filtros</string>
+    <string name="badge_new_chapters_format">+%1$d NOVO</string>
+    <string name="batch_select_all_desc">Selecionar todas as obras visíveis</string>
+    <string name="batch_move_categories">Categorias</string>
+    <string name="batch_mark_caught_up">Em dia</string>
+    <string name="batch_remove_shelf">Remover</string>
+    <string name="batch_exit_desc">Sair da seleção múltipla</string>
+    <string name="favorites_updates_found_format">%1$d novos capítulos encontrados em %2$d obras!</string>
+    <string name="favorites_updates_none">Tudo em dia! Nenhum capítulo novo nas %1$d obras verificadas.</string>
+    <string name="favorites_updates_empty">Adicione obras aos favoritos antes de verificar atualizações.</string>
+    <string name="favorites_batch_categories_saved">Categorias atualizadas para %1$d obras.</string>
+    <string name="favorites_batch_caught_up_done">%1$d obras marcadas como em dia.</string>
+    <string name="favorites_batch_removed_done">%1$d obras removidas da estante.</string>
 
     <!-- Histórico -->
     <string name="clear_history">Limpar</string>
@@ -144,6 +179,8 @@
     <string name="chapter_view_detailed">Cartões</string>
     <string name="chapter_view_grid">Grade</string>
     <string name="chapter_filter_unread">Não lidos</string>
+    <string name="mark_all_chapters_read">Marcar todos lidos</string>
+    <string name="unmark_all_chapters_read">Desmarcar todos</string>
     <string name="chapter_search_placeholder">Filtrar capítulo por número ou título…</string>
     <string name="open_in_webview">Abrir no Navegador Protegido</string>
     <string name="share_manga">Compartilhar obra</string>
@@ -304,5 +341,24 @@
     <string name="export_backup_json">Exportar backup</string>
     <string name="restore_backup_any">Restaurar (.bak / .json)</string>
     <string name="clear_cache_button_format">Limpar cache de imagens e catálogos (%1$s)</string>
-    <string name="about_version_footer">Kotatsu v10.1 • Material Design 3 Expressive</string>
+    <string name="about_version_footer">Kotatsu v10.2 • Material Design 3 Expressive</string>
+
+    <!-- Painel de Estatísticas de Leitura -->
+    <string name="stats_open_action">Estatísticas</string>
+    <string name="stats_screen_title">Estatísticas</string>
+    <string name="stats_screen_subtitle">Seu ritmo de leitura, progresso por obra e gêneros favoritos</string>
+    <string name="stats_hero_badge">PAINEL DO LEITOR</string>
+    <string name="stats_chapters_completed">Capítulos lidos</string>
+    <string name="stats_pages_read">Páginas lidas</string>
+    <string name="stats_works_in_progress">Em leitura</string>
+    <string name="stats_works_caught_up">Obras em dia</string>
+    <string name="stats_shelf_completion_label">Progresso geral dos capítulos na estante</string>
+    <string name="stats_weekly_activity_title">Atividade nos últimos 7 dias</string>
+    <string name="stats_weekly_activity_sub">Capítulos concluídos e sessões de leitura por dia</string>
+    <string name="stats_top_genres_title">Seus gêneros mais presentes</string>
+    <string name="stats_sources_breakdown_title">Distribuição por origem</string>
+    <string name="stats_active_progress_title">Progresso nas suas obras</string>
+    <string name="stats_chapters_ratio_format">%1$d de %2$d capítulos lidos</string>
+    <string name="stats_empty_title">Ainda não há estatísticas suficientes</string>
+    <string name="stats_empty_sub">Adicione mangás aos favoritos ou leia alguns capítulos para visualizar seus gráficos de atividade, gêneros e conclusão.</string>
 </resources>

@@ -4,7 +4,11 @@ package org.koitharu.kotatsu.ui.components
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -57,6 +61,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.TonalToggleButton
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.ripple
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -188,6 +193,7 @@ fun ExpressiveLoadingBox(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MangaCoverCard(
     manga: MangaItem,
@@ -195,37 +201,65 @@ fun MangaCoverCard(
     modifier: Modifier = Modifier,
     progressFraction: Float? = null,
     showSourceBadge: Boolean = true,
+    unreadCount: Int = 0,
+    newChaptersCount: Int = 0,
+    selectionMode: Boolean = false,
+    isSelected: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
     testTagName: String = "manga_card_${manga.id}"
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val cornerRadius by animateDpAsState(
-        targetValue = if (isPressed) 12.dp else 24.dp,
+        targetValue = when {
+            isSelected -> 18.dp
+            isPressed -> 12.dp
+            else -> 24.dp
+        },
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "cardCornerMorph"
     )
     val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.965f else 1f,
+        targetValue = when {
+            isPressed -> 0.965f
+            isSelected -> 0.975f
+            else -> 1f
+        },
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "cardScaleMorph"
     )
     val morphedShape = RoundedCornerShape(cornerRadius)
+    val checkBadgeShape = MaterialShapes.Cookie9Sided.toShape()
 
     Card(
-        onClick = onClick,
-        interactionSource = interactionSource,
         shape = morphedShape,
+        border = if (isSelected) {
+            BorderStroke(2.5.dp, MaterialTheme.colorScheme.primary)
+        } else {
+            null
+        },
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = if (isSelected) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.32f)
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            }
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 4.dp else 2.dp),
         modifier = modifier
             .fillMaxWidth()
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
             }
+            .clip(morphedShape)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = ripple(),
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .testTag(testTagName)
     ) {
         Column {
@@ -264,7 +298,7 @@ fun MangaCoverCard(
                         )
                 )
 
-                if (showSourceBadge) {
+                if (showSourceBadge && !selectionMode) {
                     val isLocal = manga.sourceType == MangaSourceType.LOCAL_CBZ
                     val isCustom = manga.sourceType == MangaSourceType.CUSTOM_WEB
                     Surface(
@@ -290,6 +324,87 @@ fun MangaCoverCard(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
+                    }
+                }
+
+                // Top-End Selection Indicator OR New/Unread Chapter Alerts
+                if (selectionMode) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .size(30.dp)
+                            .clip(if (isSelected) checkBadgeShape else CircleShape)
+                            .background(
+                                if (isSelected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f)
+                                }
+                            )
+                            .then(
+                                if (!isSelected) {
+                                    Modifier.border(
+                                        width = 1.5.dp,
+                                        color = Color.White.copy(alpha = 0.8f),
+                                        shape = CircleShape
+                                    )
+                                } else {
+                                    Modifier
+                                }
+                            )
+                    ) {
+                        if (isSelected) {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                    }
+                } else if (newChaptersCount > 0 || unreadCount > 0) {
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                    ) {
+                        if (newChaptersCount > 0) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                shadowElevation = 2.dp
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.badge_new_chapters_format,
+                                        newChaptersCount
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onTertiary,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+                        if (unreadCount > 0) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary,
+                                shadowElevation = 2.dp
+                            ) {
+                                Text(
+                                    text = unreadCount.toString(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
                     }
                 }
 

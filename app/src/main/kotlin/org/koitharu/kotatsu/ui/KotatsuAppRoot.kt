@@ -103,10 +103,13 @@ import org.koitharu.kotatsu.ui.navigation.MangaDetailsRoute
 import org.koitharu.kotatsu.ui.navigation.ReaderRoute
 import org.koitharu.kotatsu.ui.navigation.SettingsRoute
 import org.koitharu.kotatsu.ui.navigation.SourceBrowserRoute
+import org.koitharu.kotatsu.ui.navigation.StatisticsRoute
 import org.koitharu.kotatsu.ui.reader.ReaderScreen
 import org.koitharu.kotatsu.ui.reader.ReaderViewModel
 import org.koitharu.kotatsu.ui.settings.SettingsScreen
 import org.koitharu.kotatsu.ui.settings.SettingsViewModel
+import org.koitharu.kotatsu.ui.stats.StatisticsScreen
+import org.koitharu.kotatsu.ui.stats.StatisticsViewModel
 
 private data class TopLevelNavTab<T : Any>(
     val route: T,
@@ -472,6 +475,7 @@ private fun KotatsuNavHost(
             FavoritesScreen(
                 viewModel = vm,
                 bottomClearance = bottomDockClearance,
+                onOpenStatistics = { navController.navigate(StatisticsRoute) },
                 onOpenSettings = openSettingsOrNull,
                 onOpenManga = { manga ->
                     navController.navigate(
@@ -492,6 +496,7 @@ private fun KotatsuNavHost(
             HistoryScreen(
                 viewModel = vm,
                 bottomClearance = bottomDockClearance,
+                onOpenStatistics = { navController.navigate(StatisticsRoute) },
                 onOpenSettings = openSettingsOrNull,
                 onOpenMangaDetails = { manga ->
                     navController.navigate(
@@ -551,6 +556,28 @@ private fun KotatsuNavHost(
                 onTriggerLockNow = onTriggerLockNow,
                 bottomClearance = 24.dp,
                 modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composable<StatisticsRoute> {
+            val vm: StatisticsViewModel = viewModel(
+                factory = StatisticsViewModel.factory(repository)
+            )
+            StatisticsScreen(
+                viewModel = vm,
+                onBack = { navController.popBackStack() },
+                onOpenManga = { manga ->
+                    navController.navigate(
+                        MangaDetailsRoute(
+                            mangaId = manga.id,
+                            sourceTypeName = manga.sourceType.name
+                        )
+                    )
+                },
+                onNavigateExplore = {
+                    navController.popBackStack()
+                    onSwitchToExplore()
+                }
             )
         }
 

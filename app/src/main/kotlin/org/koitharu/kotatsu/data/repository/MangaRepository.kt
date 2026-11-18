@@ -28,17 +28,27 @@ import org.koitharu.kotatsu.data.remote.MangaDexApi
 import org.koitharu.kotatsu.domain.model.CatalogSort
 import org.koitharu.kotatsu.domain.model.ChapterItem
 import org.koitharu.kotatsu.domain.model.CustomMangaSource
+import org.koitharu.kotatsu.domain.model.DailyActivityPoint
 import org.koitharu.kotatsu.domain.model.FavoriteCategory
+import org.koitharu.kotatsu.domain.model.FavoritesUpdateSummary
+import org.koitharu.kotatsu.domain.model.GenreStatItem
 import org.koitharu.kotatsu.domain.model.LanguageFilter
 import org.koitharu.kotatsu.domain.model.LibraryStats
 import org.koitharu.kotatsu.domain.model.MangaItem
+import org.koitharu.kotatsu.domain.model.MangaProgressStatItem
 import org.koitharu.kotatsu.domain.model.MangaSourceType
 import org.koitharu.kotatsu.domain.model.MangaTag
 import org.koitharu.kotatsu.domain.model.PageBookmarkItem
 import org.koitharu.kotatsu.domain.model.PageItem
+import org.koitharu.kotatsu.domain.model.ReadingAnalytics
 import org.koitharu.kotatsu.domain.model.ReadingHistoryItem
+import org.koitharu.kotatsu.domain.model.SourceStatItem
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 class MangaRepository(
     private val appContext: Context,
@@ -110,6 +120,10 @@ class MangaRepository(
         }
     }
 
+    val completedCountsByMangaFlow: Flow<Map<String, Int>> = dao.observeCompletedCountsByManga().map { rows ->
+        rows.associate { it.mangaId to it.completedCount }
+    }
+
     val libraryStatsFlow: Flow<LibraryStats> = combine(
         allFavoritesFlow,
         readingHistoryFlow,
@@ -123,6 +137,22 @@ class MangaRepository(
             bookmarksCount = bms.size,
             localCbzCount = locals.size,
             customSourcesCount = sources.size
+        )
+    }
+
+    val readingAnalyticsFlow: Flow<ReadingAnalytics> = combine(
+        allFavoritesFlow,
+        readingHistoryFlow,
+        dao.observeAllCompletedChapters(),
+        allBookmarksFlow,
+        completedCountsByMangaFlow
+    ) { favs, hist, completedEntities, bookmarks, completedCounts ->
+        buildReadingAnalytics(
+            favorites = favs,
+            history = hist,
+            completedEntities = completedEntities,
+            bookmarksCount = bookmarks.size,
+            completedCounts = completedCounts
         )
     }
 
@@ -257,9 +287,18 @@ class MangaRepository(
         }
 
         results.forEach { item ->
-            memoryMangaCache[item.id] = item
-            if (item.sourceType == MangaSourceType.CUSTOM_WEB || item.sourceType == MangaSourceType.ONLINE_KITSU) {
-                runCatching { dao.upsertManga(MangaEntity.fromDomain(item)) }
+            val existing = memoryMangaCache[item.id]
+            val merged = if (existing != null && item.knownChaptersCount == 0) {
+                item.copy(
+                    knownChaptersCount = existing.knownChaptersCount,
+                    newChaptersDelta = existing.newChaptersDelta
+                )
+            } else {
+                item
+            }
+            memoryMangaCache[item.id] = merged
+            if (merged.sourceType == MangaSourceType.CUSTOM_WEB || merged.sourceType == MangaSourceType.ONLINE_KITSU) {
+                runCatching { dao.upsertMangaPreservingChapterStats(MangaEntity.fromDomain(merged)) }
             }
         }
         results
@@ -317,9 +356,11 @@ class MangaRepository(
 
     suspend fun importLocalCbz(uri: Uri): MangaItem {
         val imported = localCbzRepository.importCbzUri(uri)
-        memoryMangaCache[imported.id] = imported
-        dao.upsertManga(MangaEntity.fromDomain(imported))
-        return imported
+        val localChapters = runCatching { localCbzRepository.getLocalChapters(imported) }.getOrDefault(emptyList())
+        val withCount = imported.copy(knownChaptersCount = localChapters.size)
+        memoryMangaCache[withCount.id] = withCount
+        dao.upsertMangaPreservingChapterStats(MangaEntity.fromDomain(withCount))
+        return withCount
     }
 
     suspend fun deleteLocalManga(manga: MangaItem) {
@@ -332,7 +373,8 @@ class MangaRepository(
     }
 
     suspend fun getMangaDetails(mangaId: String, sourceType: MangaSourceType): MangaItem {
-        val cached = memoryMangaCache[mangaId] ?: dao.getMangaById(mangaId)?.toDomain()
+        val dbItem = dao.getMangaById(mangaId)?.toDomain()
+        val cached = dbItem ?: memoryMangaCache[mangaId]
 
         return when (sourceType) {
             MangaSourceType.ONLINE_MANGADEX -> {
@@ -341,8 +383,19 @@ class MangaRepository(
                     cached
                 } else {
                     val remote = api.getMangaById(mangaId)
-                    memoryMangaCache[mangaId] = remote
-                    remote
+                    val merged = if (cached != null) {
+                        remote.copy(
+                            knownChaptersCount = cached.knownChaptersCount,
+                            newChaptersDelta = cached.newChaptersDelta
+                        )
+                    } else {
+                        remote
+                    }
+                    memoryMangaCache[mangaId] = merged
+                    if (dbItem != null) {
+                        dao.upsertMangaPreservingChapterStats(MangaEntity.fromDomain(merged))
+                    }
+                    merged
                 }
             }
 
@@ -350,18 +403,22 @@ class MangaRepository(
                 val remote = cached ?: kitsuApi.getMangaById(mangaId)
                     ?: throw IllegalStateException("Obra do catálogo Kitsu não encontrada.")
                 memoryMangaCache[mangaId] = remote
-                dao.upsertManga(MangaEntity.fromDomain(remote))
+                dao.upsertMangaPreservingChapterStats(MangaEntity.fromDomain(remote))
                 remote
             }
 
             MangaSourceType.CUSTOM_WEB -> {
                 val base = cached ?: throw IllegalStateException("Obra da fonte externa não encontrada.")
                 if (base.sourceUrl != null) {
-                    val (enriched, chapters) = runCatching {
+                    val (enrichedRaw, chapters) = runCatching {
                         customSiteParser.fetchMangaDetailsAndChapters(base)
                     }.getOrDefault(base to emptyList())
+                    val enriched = enrichedRaw.copy(
+                        knownChaptersCount = if (chapters.isNotEmpty()) chapters.size else base.knownChaptersCount,
+                        newChaptersDelta = base.newChaptersDelta
+                    )
                     memoryMangaCache[mangaId] = enriched
-                    dao.upsertManga(MangaEntity.fromDomain(enriched))
+                    dao.upsertMangaPreservingChapterStats(MangaEntity.fromDomain(enriched))
                     if (chapters.isNotEmpty()) {
                         chapters.forEach { ch ->
                             ch.chapterUrl?.let { url -> chapterUrlCache[ch.id] = url }
@@ -383,48 +440,141 @@ class MangaRepository(
     suspend fun getChapters(
         manga: MangaItem,
         language: LanguageFilter,
-        forceRefresh: Boolean = false
+        forceRefresh: Boolean = false,
+        recordInspection: Boolean = false
     ): List<ChapterItem> {
         val cacheKey = if (manga.sourceType == MangaSourceType.CUSTOM_WEB) {
             "${manga.id}_ALL"
         } else {
             "${manga.id}_${language.name}"
         }
-        if (!forceRefresh) {
-            memoryChaptersCache[cacheKey]?.let { return it }
-        }
-        val chapters = when (manga.sourceType) {
-            MangaSourceType.LOCAL_CBZ -> localCbzRepository.getLocalChapters(manga)
-            MangaSourceType.ONLINE_MANGADEX -> api.getChapters(manga.id, language)
-            MangaSourceType.ONLINE_KITSU -> {
-                val matches = runCatching {
-                    api.searchManga(
-                        query = manga.title,
-                        language = language,
-                        sort = CatalogSort.POPULAR,
-                        tagId = null,
-                        limit = 5
-                    )
-                }.getOrDefault(emptyList())
-                val bestMatch = matches.firstOrNull()
-                if (bestMatch != null) {
-                    api.getChapters(bestMatch.id, language).map { it.copy(mangaId = manga.id) }
-                } else {
-                    emptyList()
+        val chapters = if (!forceRefresh && memoryChaptersCache.containsKey(cacheKey)) {
+            memoryChaptersCache[cacheKey].orEmpty()
+        } else {
+            val fetched = when (manga.sourceType) {
+                MangaSourceType.LOCAL_CBZ -> localCbzRepository.getLocalChapters(manga)
+                MangaSourceType.ONLINE_MANGADEX -> api.getChapters(manga.id, language)
+                MangaSourceType.ONLINE_KITSU -> {
+                    val matches = runCatching {
+                        api.searchManga(
+                            query = manga.title,
+                            language = language,
+                            sort = CatalogSort.POPULAR,
+                            tagId = null,
+                            limit = 5
+                        )
+                    }.getOrDefault(emptyList())
+                    val bestMatch = matches.firstOrNull()
+                    if (bestMatch != null) {
+                        api.getChapters(bestMatch.id, language).map { it.copy(mangaId = manga.id) }
+                    } else {
+                        emptyList()
+                    }
+                }
+                MangaSourceType.CUSTOM_WEB -> {
+                    val (_, parsedChapters) = runCatching {
+                        customSiteParser.fetchMangaDetailsAndChapters(manga)
+                    }.getOrDefault(manga to emptyList())
+                    parsedChapters.forEach { ch ->
+                        ch.chapterUrl?.let { url -> chapterUrlCache[ch.id] = url }
+                    }
+                    parsedChapters
                 }
             }
-            MangaSourceType.CUSTOM_WEB -> {
-                val (_, parsedChapters) = runCatching {
-                    customSiteParser.fetchMangaDetailsAndChapters(manga)
-                }.getOrDefault(manga to emptyList())
-                parsedChapters.forEach { ch ->
-                    ch.chapterUrl?.let { url -> chapterUrlCache[ch.id] = url }
-                }
-                parsedChapters
+            memoryChaptersCache[cacheKey] = fetched
+            fetched
+        }
+
+        if (recordInspection) {
+            val knownCount = maxOf(chapters.size, manga.knownChaptersCount)
+            val updatedManga = manga.copy(
+                knownChaptersCount = knownCount,
+                newChaptersDelta = 0
+            )
+            memoryMangaCache[manga.id] = updatedManga
+            if (dao.getMangaById(manga.id) != null) {
+                dao.updateMangaChapterTracking(
+                    mangaId = manga.id,
+                    knownCount = knownCount,
+                    newDelta = 0
+                )
             }
         }
-        memoryChaptersCache[cacheKey] = chapters
         return chapters
+    }
+
+    suspend fun checkFavoritesUpdates(
+        onProgress: (checked: Int, total: Int) -> Unit = { _, _ -> }
+    ): FavoritesUpdateSummary = coroutineScope {
+        val favorites = allFavoritesFlow.first()
+        if (favorites.isEmpty()) {
+            return@coroutineScope FavoritesUpdateSummary(
+                checkedCount = 0,
+                mangasWithNewCount = 0,
+                totalNewChapters = 0
+            )
+        }
+        val prefLang = preferencesRepository.preferencesFlow.first().preferredLanguage
+        val checkedCounter = AtomicInteger(0)
+        var mangasWithNew = 0
+        var totalNew = 0
+
+        onProgress(0, favorites.size)
+
+        favorites.chunked(4).forEach { batch ->
+            val batchDeltas = batch.map { fav ->
+                async {
+                    val chapters = runCatching {
+                        getChapters(
+                            manga = fav,
+                            language = prefLang,
+                            forceRefresh = true,
+                            recordInspection = false
+                        )
+                    }.getOrNull()
+
+                    var newlyDetected = 0
+                    if (chapters != null) {
+                        val fetchedCount = chapters.size
+                        val previousKnown = fav.knownChaptersCount
+                        newlyDetected = if (previousKnown > 0 && fetchedCount > previousKnown) {
+                            fetchedCount - previousKnown
+                        } else {
+                            0
+                        }
+                        val nextKnown = maxOf(previousKnown, fetchedCount)
+                        val nextDelta = fav.newChaptersDelta + newlyDetected
+                        if (nextKnown != previousKnown || nextDelta != fav.newChaptersDelta) {
+                            dao.updateMangaChapterTracking(
+                                mangaId = fav.id,
+                                knownCount = nextKnown,
+                                newDelta = nextDelta
+                            )
+                            memoryMangaCache[fav.id] = fav.copy(
+                                knownChaptersCount = nextKnown,
+                                newChaptersDelta = nextDelta
+                            )
+                        }
+                    }
+                    val done = checkedCounter.incrementAndGet()
+                    onProgress(done, favorites.size)
+                    newlyDetected
+                }
+            }.awaitAll()
+
+            batchDeltas.forEach { delta ->
+                if (delta > 0) {
+                    mangasWithNew++
+                    totalNew += delta
+                }
+            }
+        }
+
+        FavoritesUpdateSummary(
+            checkedCount = favorites.size,
+            mangasWithNewCount = mangasWithNew,
+            totalNewChapters = totalNew
+        )
     }
 
     suspend fun getChapterPages(
@@ -487,15 +637,15 @@ class MangaRepository(
             chapterUrl = pageUrl
         )
 
-        memoryMangaCache[mangaId] = manga
-        dao.upsertManga(MangaEntity.fromDomain(manga))
+        memoryMangaCache[mangaId] = manga.copy(knownChaptersCount = 1)
+        dao.upsertMangaPreservingChapterStats(MangaEntity.fromDomain(manga.copy(knownChaptersCount = 1)))
         chapterUrlCache[chapterId] = pageUrl
         adHocPagesCache[chapterId] = pages
         memoryChaptersCache["${mangaId}_ALL"] = listOf(chapter)
         return manga to chapter
     }
 
-    // Categories CRUD
+    // Categories CRUD & Batch Shelf Operations
     suspend fun createCategory(name: String): Long {
         val trimmed = name.trim()
         if (trimmed.isBlank()) return -1L
@@ -515,7 +665,71 @@ class MangaRepository(
     }
 
     suspend fun updateMangaCategories(manga: MangaItem, selectedCategoryIds: Set<Long>) {
-        dao.setCategoriesForManga(MangaEntity.fromDomain(manga), selectedCategoryIds)
+        val cachedKnown = memoryMangaCache[manga.id]?.knownChaptersCount ?: 0
+        val enriched = if (manga.knownChaptersCount == 0 && cachedKnown > 0) {
+            manga.copy(knownChaptersCount = cachedKnown)
+        } else {
+            manga
+        }
+        dao.setCategoriesForManga(MangaEntity.fromDomain(enriched), selectedCategoryIds)
+    }
+
+    suspend fun updateMangasCategoriesBatch(mangas: List<MangaItem>, selectedCategoryIds: Set<Long>) {
+        if (mangas.isEmpty()) return
+        dao.setCategoriesForMangasBatch(
+            mangas = mangas.map(MangaEntity::fromDomain),
+            categoryIds = selectedCategoryIds
+        )
+    }
+
+    suspend fun markAllChaptersCompleted(manga: MangaItem, chapters: List<ChapterItem>) {
+        val known = maxOf(manga.knownChaptersCount, chapters.size)
+        val updated = manga.copy(knownChaptersCount = known, newChaptersDelta = 0)
+        memoryMangaCache[manga.id] = updated
+        dao.upsertMangaPreservingChapterStats(MangaEntity.fromDomain(updated))
+        if (chapters.isNotEmpty()) {
+            val now = System.currentTimeMillis()
+            dao.insertCompletedChapters(
+                chapters.map { ch ->
+                    CompletedChapterEntity(
+                        mangaId = manga.id,
+                        chapterId = ch.id,
+                        completedAt = now
+                    )
+                }
+            )
+        }
+        dao.updateMangaChapterTracking(mangaId = manga.id, knownCount = known, newDelta = 0)
+    }
+
+    suspend fun unmarkAllChaptersCompleted(mangaId: String) {
+        dao.unmarkAllChaptersForManga(mangaId)
+    }
+
+    suspend fun markMangasCaughtUpBatch(mangas: List<MangaItem>) {
+        if (mangas.isEmpty()) return
+        val prefLang = preferencesRepository.preferencesFlow.first().preferredLanguage
+        val now = System.currentTimeMillis()
+        mangas.forEach { manga ->
+            val chapters = runCatching {
+                getChapters(manga, prefLang, forceRefresh = false, recordInspection = true)
+            }.getOrDefault(emptyList())
+            if (chapters.isNotEmpty()) {
+                dao.insertCompletedChapters(
+                    chapters.map { ch ->
+                        CompletedChapterEntity(
+                            mangaId = manga.id,
+                            chapterId = ch.id,
+                            completedAt = now
+                        )
+                    }
+                )
+                val known = maxOf(manga.knownChaptersCount, chapters.size)
+                dao.updateMangaChapterTracking(manga.id, known, 0)
+            } else {
+                dao.clearNewChaptersDelta(manga.id)
+            }
+        }
     }
 
     // Progress & History (respects Incognito Mode)
@@ -530,7 +744,7 @@ class MangaRepository(
         val prefs = preferencesRepository.preferencesFlow.first()
         if (prefs.incognitoMode) return
 
-        dao.upsertManga(MangaEntity.fromDomain(manga))
+        dao.upsertMangaPreservingChapterStats(MangaEntity.fromDomain(manga))
         dao.upsertHistory(
             ReadingHistoryEntity(
                 mangaId = manga.id,
@@ -552,7 +766,7 @@ class MangaRepository(
     }
 
     suspend fun toggleChapterCompleted(manga: MangaItem, chapterId: String, completed: Boolean) {
-        dao.upsertManga(MangaEntity.fromDomain(manga))
+        dao.upsertMangaPreservingChapterStats(MangaEntity.fromDomain(manga))
         if (completed) {
             dao.markChapterCompleted(CompletedChapterEntity(mangaId = manga.id, chapterId = chapterId))
         } else {
@@ -578,7 +792,7 @@ class MangaRepository(
         previewUrl: String,
         currentlyBookmarked: Boolean
     ) {
-        dao.upsertManga(MangaEntity.fromDomain(manga))
+        dao.upsertMangaPreservingChapterStats(MangaEntity.fromDomain(manga))
         if (currentlyBookmarked) {
             dao.deleteBookmarkByPage(manga.id, chapterId, pageIndex)
         } else {
@@ -634,6 +848,179 @@ class MangaRepository(
             if (file.isFile) total += file.length()
         }
         return total
+    }
+
+    private fun buildReadingAnalytics(
+        favorites: List<MangaItem>,
+        history: List<ReadingHistoryItem>,
+        completedEntities: List<CompletedChapterEntity>,
+        bookmarksCount: Int,
+        completedCounts: Map<String, Int>
+    ): ReadingAnalytics {
+        val historyByManga = history.associateBy { it.manga.id }
+        val allKnownWorks = (favorites + history.map { it.manga }).distinctBy { it.id }
+
+        // Pages read: active history pages + completed chapters (22 avg pages when not active history chapter)
+        val activePagesSum = history.sumOf { (it.currentPage + 1).coerceAtLeast(1) }
+        val extraCompletedChapters = completedEntities.count { entity ->
+            historyByManga[entity.mangaId]?.chapterId != entity.chapterId
+        }
+        val estimatedPages = activePagesSum + (extraCompletedChapters * 22)
+
+        var inProgressCount = 0
+        var caughtUpCount = 0
+        var shelfReadSum = 0
+        var shelfTotalSum = 0
+
+        favorites.forEach { fav ->
+            val read = completedCounts[fav.id] ?: 0
+            val hasHistory = historyByManga.containsKey(fav.id)
+            val total = maxOf(fav.knownChaptersCount, read)
+            shelfReadSum += read.coerceAtMost(total)
+            shelfTotalSum += total
+
+            when {
+                total > 0 && read >= total -> caughtUpCount++
+                read > 0 || hasHistory -> inProgressCount++
+            }
+        }
+
+        // Also count non-favorited works actively in history as in-progress
+        history.forEach { entry ->
+            if (favorites.none { it.id == entry.manga.id }) {
+                inProgressCount++
+            }
+        }
+
+        // 7-Day Activity Buckets (oldest -> today)
+        val localePt = Locale.forLanguageTag("pt-BR")
+        val dayFmt = SimpleDateFormat("EEE", localePt)
+        val todayStartCal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val todayStartMillis = todayStartCal.timeInMillis
+        val dayMillis = 24L * 60L * 60L * 1000L
+
+        val seenDayChapterKeys = HashSet<String>()
+        val dayCounts = IntArray(7)
+
+        completedEntities.forEach { item ->
+            val diffDays = ((todayStartMillis - startOfDayMillis(item.completedAt)) / dayMillis).toInt()
+            if (diffDays in 0..6) {
+                val bucketIdx = 6 - diffDays
+                val key = "${bucketIdx}_${item.mangaId}_${item.chapterId}"
+                if (seenDayChapterKeys.add(key)) {
+                    dayCounts[bucketIdx]++
+                }
+            }
+        }
+        history.forEach { item ->
+            val diffDays = ((todayStartMillis - startOfDayMillis(item.updatedAt)) / dayMillis).toInt()
+            if (diffDays in 0..6) {
+                val bucketIdx = 6 - diffDays
+                val key = "${bucketIdx}_${item.manga.id}_${item.chapterId}"
+                if (seenDayChapterKeys.add(key)) {
+                    dayCounts[bucketIdx]++
+                }
+            }
+        }
+
+        val dailyActivity = (0..6).map { idx ->
+            val daysAgo = 6 - idx
+            val cal = (todayStartCal.clone() as Calendar).apply {
+                add(Calendar.DAY_OF_YEAR, -daysAgo)
+            }
+            val rawLabel = dayFmt.format(cal.time)
+                .trimEnd('.')
+                .replaceFirstChar { if (it.isLowerCase()) it.titlecase(localePt) else it.toString() }
+            DailyActivityPoint(
+                dayLabel = rawLabel,
+                count = dayCounts[idx],
+                isToday = daysAgo == 0
+            )
+        }
+
+        // Top Genres across user's shelf & history
+        val genreCounts = mutableMapOf<String, Int>()
+        allKnownWorks.forEach { work ->
+            work.tags.forEach { tag ->
+                val clean = tag.name.trim()
+                if (clean.isNotEmpty()) {
+                    genreCounts[clean] = (genreCounts[clean] ?: 0) + 1
+                }
+            }
+        }
+        val sortedGenres = genreCounts.entries.sortedByDescending { it.value }.take(6)
+        val maxGenreCount = sortedGenres.firstOrNull()?.value?.coerceAtLeast(1) ?: 1
+        val topGenres = sortedGenres.map { (name, count) ->
+            GenreStatItem(
+                genreName = name,
+                mangaCount = count,
+                fractionOfMax = (count.toFloat() / maxGenreCount.toFloat()).coerceIn(0.08f, 1f)
+            )
+        }
+
+        // Source Breakdown
+        val totalWorksCount = allKnownWorks.size.coerceAtLeast(1)
+        val sourceBreakdown = allKnownWorks
+            .groupBy { it.badgeText }
+            .map { (label, list) ->
+                SourceStatItem(
+                    sourceLabel = label,
+                    count = list.size,
+                    fraction = (list.size.toFloat() / totalWorksCount.toFloat()).coerceIn(0f, 1f)
+                )
+            }
+            .sortedByDescending { it.count }
+
+        // Per-Manga Active Progress
+        val mangaProgressList = allKnownWorks.mapNotNull { work ->
+            val read = completedCounts[work.id] ?: 0
+            val histEntry = historyByManga[work.id]
+            val effectiveRead = if (read == 0 && histEntry != null && histEntry.progressFraction >= 0.9f) 1 else read
+            val total = maxOf(work.knownChaptersCount, effectiveRead, if (histEntry != null) 1 else 0)
+            if (total <= 0) {
+                null
+            } else {
+                MangaProgressStatItem(
+                    manga = work,
+                    readChapters = effectiveRead,
+                    totalChapters = total
+                )
+            }
+        }.sortedWith(
+            compareByDescending<MangaProgressStatItem> { it.readChapters > 0 }
+                .thenByDescending { it.completionFraction }
+                .thenByDescending { it.totalChapters }
+        ).take(12)
+
+        return ReadingAnalytics(
+            favoritesCount = favorites.size,
+            completedChaptersCount = completedEntities.size,
+            estimatedPagesRead = estimatedPages,
+            inProgressWorksCount = inProgressCount,
+            caughtUpWorksCount = caughtUpCount,
+            bookmarksCount = bookmarksCount,
+            shelfReadChaptersSum = shelfReadSum,
+            shelfTotalChaptersSum = shelfTotalSum,
+            dailyActivity = dailyActivity,
+            topGenres = topGenres,
+            sourceBreakdown = sourceBreakdown,
+            mangaProgressList = mangaProgressList
+        )
+    }
+
+    private fun startOfDayMillis(timestamp: Long): Long {
+        return Calendar.getInstance().apply {
+            timeInMillis = timestamp
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
     }
 
     companion object {

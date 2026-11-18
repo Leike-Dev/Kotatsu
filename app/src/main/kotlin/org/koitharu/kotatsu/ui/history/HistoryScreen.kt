@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.History
@@ -33,6 +34,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -69,6 +71,7 @@ fun HistoryScreen(
     onOpenMangaDetails: (MangaItem) -> Unit,
     onResumeChapter: (ReadingHistoryItem) -> Unit,
     onNavigateExplore: () -> Unit,
+    onOpenStatistics: (() -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null,
     bottomClearance: Dp = 96.dp,
     modifier: Modifier = Modifier
@@ -89,6 +92,17 @@ fun HistoryScreen(
             onOpenSettings = onOpenSettings,
             modifier = Modifier.padding(horizontal = 16.dp),
             actions = {
+                if (onOpenStatistics != null) {
+                    FilledTonalIconButton(
+                        onClick = onOpenStatistics,
+                        modifier = Modifier.testTag("history_open_stats_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.BarChart,
+                            contentDescription = stringResource(R.string.stats_open_action)
+                        )
+                    }
+                }
                 if (historyItems.isNotEmpty()) {
                     FilledTonalButton(
                         onClick = { showClearDialog = true },

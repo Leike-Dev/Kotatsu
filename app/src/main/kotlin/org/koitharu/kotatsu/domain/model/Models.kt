@@ -69,6 +69,21 @@ enum class CatalogSort {
     RATING
 }
 
+enum class FavoritesFilterMode {
+    ALL,
+    NEW_CHAPTERS,
+    UNREAD,
+    IN_PROGRESS,
+    CAUGHT_UP
+}
+
+enum class FavoritesSortMode {
+    ADDED_RECENT,
+    LAST_READ,
+    ALPHABETICAL,
+    MOST_UNREAD
+}
+
 @Serializable
 data class MangaTag(
     val id: String,
@@ -95,7 +110,9 @@ data class MangaItem(
     val tags: List<MangaTag>,
     val localPath: String? = null,
     val sourceUrl: String? = null,
-    val sourceLabel: String = ""
+    val sourceLabel: String = "",
+    val knownChaptersCount: Int = 0,
+    val newChaptersDelta: Int = 0
 ) {
     val badgeText: String
         get() = when {
@@ -176,6 +193,61 @@ data class LibraryStats(
     val localCbzCount: Int = 0,
     val customSourcesCount: Int = 0
 )
+
+data class FavoritesUpdateSummary(
+    val checkedCount: Int,
+    val mangasWithNewCount: Int,
+    val totalNewChapters: Int
+)
+
+data class DailyActivityPoint(
+    val dayLabel: String,
+    val count: Int,
+    val isToday: Boolean = false
+)
+
+data class GenreStatItem(
+    val genreName: String,
+    val mangaCount: Int,
+    val fractionOfMax: Float
+)
+
+data class SourceStatItem(
+    val sourceLabel: String,
+    val count: Int,
+    val fraction: Float
+)
+
+data class MangaProgressStatItem(
+    val manga: MangaItem,
+    val readChapters: Int,
+    val totalChapters: Int
+) {
+    val completionFraction: Float
+        get() = if (totalChapters <= 0) 0f else (readChapters.toFloat() / totalChapters.toFloat()).coerceIn(0f, 1f)
+}
+
+data class ReadingAnalytics(
+    val favoritesCount: Int = 0,
+    val completedChaptersCount: Int = 0,
+    val estimatedPagesRead: Int = 0,
+    val inProgressWorksCount: Int = 0,
+    val caughtUpWorksCount: Int = 0,
+    val bookmarksCount: Int = 0,
+    val shelfReadChaptersSum: Int = 0,
+    val shelfTotalChaptersSum: Int = 0,
+    val dailyActivity: List<DailyActivityPoint> = emptyList(),
+    val topGenres: List<GenreStatItem> = emptyList(),
+    val sourceBreakdown: List<SourceStatItem> = emptyList(),
+    val mangaProgressList: List<MangaProgressStatItem> = emptyList()
+) {
+    val shelfCompletionFraction: Float
+        get() = if (shelfTotalChaptersSum <= 0) 0f
+        else (shelfReadChaptersSum.toFloat() / shelfTotalChaptersSum.toFloat()).coerceIn(0f, 1f)
+
+    val hasAnyActivity: Boolean
+        get() = favoritesCount > 0 || completedChaptersCount > 0 || estimatedPagesRead > 0 || bookmarksCount > 0
+}
 
 data class AppPreferences(
     // Appearance

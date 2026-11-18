@@ -29,6 +29,40 @@ interface KotatsuDao {
     @Query("DELETE FROM mangas WHERE id = :mangaId")
     suspend fun deleteMangaById(mangaId: String)
 
+    @Transaction
+    suspend fun upsertMangaPreservingChapterStats(manga: MangaEntity) {
+        val existing = getMangaById(manga.id)
+        val merged = if (existing != null) {
+            manga.copy(
+                knownChaptersCount = if (manga.knownChaptersCount > 0) {
+                    manga.knownChaptersCount
+                } else {
+                    existing.knownChaptersCount
+                },
+                newChaptersDelta = if (manga.knownChaptersCount > 0) {
+                    manga.newChaptersDelta
+                } else {
+                    existing.newChaptersDelta
+                }
+            )
+        } else {
+            manga
+        }
+        upsertManga(merged)
+    }
+
+    @Query(
+        """
+        UPDATE mangas
+        SET knownChaptersCount = :knownCount, newChaptersDelta = :newDelta
+        WHERE id = :mangaId
+        """
+    )
+    suspend fun updateMangaChapterTracking(mangaId: String, knownCount: Int, newDelta: Int)
+
+    @Query("UPDATE mangas SET newChaptersDelta = 0 WHERE id = :mangaId")
+    suspend fun clearNewChaptersDelta(mangaId: String)
+
     // Favorite Categories
     @Query(
         """
@@ -105,7 +139,7 @@ interface KotatsuDao {
 
     @Transaction
     suspend fun setCategoriesForManga(manga: MangaEntity, categoryIds: Set<Long>) {
-        upsertManga(manga)
+        upsertMangaPreservingChapterStats(manga)
         clearCategoriesForManga(manga.id)
         val now = System.currentTimeMillis()
         categoryIds.forEach { catId ->
@@ -116,6 +150,24 @@ interface KotatsuDao {
                     addedAt = now
                 )
             )
+        }
+    }
+
+    @Transaction
+    suspend fun setCategoriesForMangasBatch(mangas: List<MangaEntity>, categoryIds: Set<Long>) {
+        val now = System.currentTimeMillis()
+        mangas.forEach { manga ->
+            upsertMangaPreservingChapterStats(manga)
+            clearCategoriesForManga(manga.id)
+            categoryIds.forEach { catId ->
+                insertMangaCategoryRef(
+                    MangaCategoryCrossRef(
+                        mangaId = manga.id,
+                        categoryId = catId,
+                        addedAt = now
+                    )
+                )
+            }
         }
     }
 
@@ -151,8 +203,17 @@ interface KotatsuDao {
     @Query("DELETE FROM completed_chapters WHERE mangaId = :mangaId AND chapterId = :chapterId")
     suspend fun unmarkChapterCompleted(mangaId: String, chapterId: String)
 
+    @Query("DELETE FROM completed_chapters WHERE mangaId = :mangaId")
+    suspend fun unmarkAllChaptersForManga(mangaId: String)
+
     @Query("SELECT chapterId FROM completed_chapters WHERE mangaId = :mangaId")
     fun observeCompletedChapterIds(mangaId: String): Flow<List<String>>
+
+    @Query("SELECT mangaId, COUNT(*) AS completedCount FROM completed_chapters GROUP BY mangaId")
+    fun observeCompletedCountsByManga(): Flow<List<MangaCompletedCountRow>>
+
+    @Query("SELECT * FROM completed_chapters ORDER BY completedAt DESC")
+    fun observeAllCompletedChapters(): Flow<List<CompletedChapterEntity>>
 
     @Query("SELECT * FROM completed_chapters")
     suspend fun getAllCompletedChaptersList(): List<CompletedChapterEntity>

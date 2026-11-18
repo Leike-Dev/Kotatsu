@@ -26,6 +26,8 @@ data class MangaEntity(
     val localPath: String?,
     val sourceUrl: String? = null,
     @ColumnInfo(defaultValue = "") val sourceLabel: String = "",
+    @ColumnInfo(defaultValue = "0") val knownChaptersCount: Int = 0,
+    @ColumnInfo(defaultValue = "0") val newChaptersDelta: Int = 0,
     val updatedAt: Long = System.currentTimeMillis()
 ) {
     fun toDomain(): MangaItem {
@@ -50,7 +52,9 @@ data class MangaEntity(
             tags = parsedTags,
             localPath = localPath,
             sourceUrl = sourceUrl,
-            sourceLabel = sourceLabel
+            sourceLabel = sourceLabel,
+            knownChaptersCount = knownChaptersCount,
+            newChaptersDelta = newChaptersDelta
         )
     }
 
@@ -69,6 +73,8 @@ data class MangaEntity(
                 localPath = item.localPath,
                 sourceUrl = item.sourceUrl,
                 sourceLabel = item.sourceLabel,
+                knownChaptersCount = item.knownChaptersCount,
+                newChaptersDelta = item.newChaptersDelta,
                 updatedAt = System.currentTimeMillis()
             )
         }
@@ -181,4 +187,9 @@ data class CategoryWithCountRow(
     val name: String,
     val sortOrder: Int,
     val mangaCount: Int
+)
+
+data class MangaCompletedCountRow(
+    val mangaId: String,
+    val completedCount: Int
 )

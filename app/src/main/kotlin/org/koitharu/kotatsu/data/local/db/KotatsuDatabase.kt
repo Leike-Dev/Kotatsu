@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PageBookmarkEntity::class,
         CustomSourceEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class KotatsuDatabase : RoomDatabase() {
@@ -43,13 +43,20 @@ abstract class KotatsuDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE mangas ADD COLUMN knownChaptersCount INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE mangas ADD COLUMN newChaptersDelta INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun build(context: Context): KotatsuDatabase {
             return Room.databaseBuilder(
                 context.applicationContext,
                 KotatsuDatabase::class.java,
                 "kotatsu_compose.db"
             )
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .fallbackToDestructiveMigration(true)
                 .build()
         }

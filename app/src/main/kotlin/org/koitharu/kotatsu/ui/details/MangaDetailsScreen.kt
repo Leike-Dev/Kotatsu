@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material.icons.outlined.Clear
+import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.OpenInBrowser
@@ -259,6 +260,8 @@ fun MangaDetailsScreen(
                                     ChaptersSectionHeader(
                                         manga = manga,
                                         totalChapters = uiState.chapters.size,
+                                        allChaptersRead = uiState.chapters.isNotEmpty() &&
+                                            uiState.chapters.all { it.id in completedChapterIds },
                                         selectedLanguage = uiState.selectedLanguage,
                                         displayMode = prefs.chapterDisplayMode,
                                         sortDescending = uiState.sortDescending,
@@ -269,6 +272,7 @@ fun MangaDetailsScreen(
                                         onSelectDisplayMode = viewModel::setChapterDisplayMode,
                                         onToggleOrder = viewModel::toggleChapterOrder,
                                         onToggleUnreadOnly = viewModel::toggleUnreadOnly,
+                                        onToggleAllRead = viewModel::setAllChaptersRead,
                                         onSearchQueryChanged = viewModel::onChapterSearchChanged,
                                         onOpenWebFallback = {
                                             manga.sourceUrl?.let { onOpenInBrowser(it, manga.title) }
@@ -387,6 +391,8 @@ fun MangaDetailsScreen(
                                     ChaptersSectionHeader(
                                         manga = manga,
                                         totalChapters = uiState.chapters.size,
+                                        allChaptersRead = uiState.chapters.isNotEmpty() &&
+                                            uiState.chapters.all { it.id in completedChapterIds },
                                         selectedLanguage = uiState.selectedLanguage,
                                         displayMode = prefs.chapterDisplayMode,
                                         sortDescending = uiState.sortDescending,
@@ -397,6 +403,7 @@ fun MangaDetailsScreen(
                                         onSelectDisplayMode = viewModel::setChapterDisplayMode,
                                         onToggleOrder = viewModel::toggleChapterOrder,
                                         onToggleUnreadOnly = viewModel::toggleUnreadOnly,
+                                        onToggleAllRead = viewModel::setAllChaptersRead,
                                         onSearchQueryChanged = viewModel::onChapterSearchChanged,
                                         onOpenWebFallback = {
                                             manga.sourceUrl?.let { onOpenInBrowser(it, manga.title) }
@@ -734,6 +741,7 @@ private fun MangaHeroSummarySection(
 private fun ChaptersSectionHeader(
     manga: MangaItem,
     totalChapters: Int,
+    allChaptersRead: Boolean,
     selectedLanguage: LanguageFilter,
     displayMode: ChapterDisplayMode,
     sortDescending: Boolean,
@@ -744,6 +752,7 @@ private fun ChaptersSectionHeader(
     onSelectDisplayMode: (ChapterDisplayMode) -> Unit,
     onToggleOrder: () -> Unit,
     onToggleUnreadOnly: () -> Unit,
+    onToggleAllRead: (Boolean) -> Unit,
     onSearchQueryChanged: (String) -> Unit,
     onOpenWebFallback: () -> Unit
 ) {
@@ -800,7 +809,7 @@ private fun ChaptersSectionHeader(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Sort + Unread + Language Filter Strip
+        // Sort + Unread + Mark All Read + Language Filter Strip
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -836,6 +845,30 @@ private fun ChaptersSectionHeader(
                     modifier = Modifier.testTag("filter_unread_chapters_button")
                 ) {
                     Text(stringResource(R.string.chapter_filter_unread))
+                }
+            }
+
+            if (totalChapters > 0) {
+                item {
+                    OutlinedToggleButton(
+                        checked = allChaptersRead,
+                        onCheckedChange = { onToggleAllRead(!allChaptersRead) },
+                        shapes = ToggleButtonDefaults.shapes(),
+                        modifier = Modifier.testTag("mark_all_chapters_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.DoneAll,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            stringResource(
+                                if (allChaptersRead) R.string.unmark_all_chapters_read
+                                else R.string.mark_all_chapters_read
+                            )
+                        )
+                    }
                 }
             }
 
