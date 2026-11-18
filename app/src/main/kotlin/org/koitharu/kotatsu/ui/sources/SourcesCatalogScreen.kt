@@ -3,7 +3,6 @@
 package org.koitharu.kotatsu.ui.sources
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -312,7 +311,6 @@ fun SourcesCatalogScreen(
                                 shapes = ToggleButtonDefaults.shapes(),
                                 modifier = Modifier
                                     .minimumInteractiveComponentSize()
-                                    .animateContentSize(MaterialTheme.motionScheme.fastSpatialSpec())
                                     .testTag("sources_region_${filter.name}")
                             ) {
                                 if (selected) {

@@ -20,16 +20,23 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
@@ -37,7 +44,6 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -61,6 +67,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.TonalToggleButton
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ripple
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
@@ -915,104 +922,130 @@ fun AddCustomSourceDialog(
     var baseUrl by remember(initialSource) { mutableStateOf(initialSource?.baseUrl.orEmpty()) }
     var searchTemplate by remember(initialSource) { mutableStateOf(initialSource?.searchUrlTemplate.orEmpty()) }
 
-    AlertDialog(
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         shape = MaterialTheme.shapes.extraLarge,
-        title = {
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp)
+                .testTag("add_custom_source_sheet")
+        ) {
             Text(
-                stringResource(
+                text = stringResource(
                     if (initialSource != null) R.string.edit_custom_source_title
                     else R.string.add_custom_source_title
-                )
+                ),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
             )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.source_name_label)) },
-                    placeholder = { Text(stringResource(R.string.source_name_placeholder)) },
-                    singleLine = true,
-                    shape = MaterialTheme.shapes.large,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("custom_source_name_input")
-                )
 
-                OutlinedTextField(
-                    value = baseUrl,
-                    onValueChange = { baseUrl = it },
-                    label = { Text(stringResource(R.string.source_url_label)) },
-                    placeholder = { Text(stringResource(R.string.source_url_placeholder)) },
-                    singleLine = true,
-                    shape = MaterialTheme.shapes.large,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("custom_source_url_input")
-                )
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text(stringResource(R.string.source_name_label)) },
+                placeholder = { Text(stringResource(R.string.source_name_placeholder)) },
+                singleLine = true,
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("custom_source_name_input")
+            )
 
-                OutlinedTextField(
-                    value = searchTemplate,
-                    onValueChange = { searchTemplate = it },
-                    label = { Text(stringResource(R.string.source_search_template_label)) },
-                    placeholder = { Text(stringResource(R.string.source_search_template_hint)) },
-                    singleLine = true,
-                    shape = MaterialTheme.shapes.large,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("custom_source_template_input")
-                )
+            OutlinedTextField(
+                value = baseUrl,
+                onValueChange = { baseUrl = it },
+                label = { Text(stringResource(R.string.source_url_label)) },
+                placeholder = { Text(stringResource(R.string.source_url_placeholder)) },
+                singleLine = true,
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("custom_source_url_input")
+            )
 
-                Text(
-                    text = stringResource(R.string.source_presets_label),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    val cleanBase = baseUrl.trim().trimEnd('/').ifBlank { "https://site.com" }
-                    listOf(
-                        "Madara WP" to "$cleanBase/?s={query}&post_type=wp-manga",
-                        "MangaStream" to "$cleanBase/?s={query}",
-                        "OPDS" to "$cleanBase/opds/v1.2/catalog?search={query}"
-                    ).forEach { (presetLabel, tpl) ->
-                        TonalToggleButton(
-                            checked = searchTemplate == tpl,
-                            onCheckedChange = { searchTemplate = tpl },
-                            shapes = ToggleButtonDefaults.shapes()
-                        ) {
-                            Text(presetLabel, style = MaterialTheme.typography.labelSmall)
-                        }
+            OutlinedTextField(
+                value = searchTemplate,
+                onValueChange = { searchTemplate = it },
+                label = { Text(stringResource(R.string.source_search_template_short_label)) },
+                supportingText = {
+                    Text(
+                        text = stringResource(R.string.source_search_template_hint),
+                        softWrap = true
+                    )
+                },
+                singleLine = true,
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("custom_source_template_input")
+            )
+
+            Text(
+                text = stringResource(R.string.source_presets_label),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                val cleanBase = baseUrl.trim().trimEnd('/').ifBlank { "https://site.com" }
+                listOf(
+                    "Madara WP" to "$cleanBase/?s={query}&post_type=wp-manga",
+                    "MangaStream" to "$cleanBase/?s={query}",
+                    "OPDS" to "$cleanBase/opds/v1.2/catalog?search={query}"
+                ).forEach { (presetLabel, tpl) ->
+                    TonalToggleButton(
+                        checked = searchTemplate == tpl,
+                        onCheckedChange = { searchTemplate = tpl },
+                        shapes = ToggleButtonDefaults.shapes(),
+                        modifier = Modifier.minimumInteractiveComponentSize()
+                    ) {
+                        Text(presetLabel, style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (name.isNotBlank() && baseUrl.isNotBlank()) {
-                        onConfirmAdd(name, baseUrl, searchTemplate)
-                    }
-                },
-                enabled = name.isNotBlank() && baseUrl.isNotBlank(),
-                shapes = ButtonDefaults.shapes(),
-                modifier = Modifier.testTag("confirm_add_custom_source_button")
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(stringResource(R.string.save_action))
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                shapes = ButtonDefaults.shapes()
-            ) {
-                Text(stringResource(R.string.cancel_action))
+                TextButton(
+                    onClick = onDismiss,
+                    shapes = ButtonDefaults.shapes()
+                ) {
+                    Text(stringResource(R.string.cancel_action))
+                }
+                Button(
+                    onClick = {
+                        if (name.isNotBlank() && baseUrl.isNotBlank()) {
+                            onConfirmAdd(name, baseUrl, searchTemplate)
+                        }
+                    },
+                    enabled = name.isNotBlank() && baseUrl.isNotBlank(),
+                    shapes = ButtonDefaults.shapes(),
+                    modifier = Modifier.testTag("confirm_add_custom_source_button")
+                ) {
+                    Text(stringResource(R.string.save_action))
+                }
             }
         }
-    )
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -1028,27 +1061,32 @@ fun CategorySelectBottomSheet(
     var selectedIds by remember(initialSelectedIds) { mutableStateOf(initialSelectedIds) }
     var newCategoryName by remember { mutableStateOf("") }
     var showNewField by remember { mutableStateOf(false) }
+    val categorySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = categorySheetState,
         shape = MaterialTheme.shapes.extraLarge,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
                     text = stringResource(R.string.select_categories_sheet_title),
                     style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
                 )
                 FilledTonalButton(
                     onClick = { showNewField = !showNewField },

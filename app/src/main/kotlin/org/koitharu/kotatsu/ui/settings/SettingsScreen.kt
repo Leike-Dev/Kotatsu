@@ -1,4 +1,8 @@
-@file:OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
+@file:OptIn(
+    ExperimentalMaterial3ExpressiveApi::class,
+    ExperimentalMaterial3Api::class,
+    ExperimentalLayoutApi::class
+)
 
 package org.koitharu.kotatsu.ui.settings
 
@@ -6,12 +10,6 @@ import android.os.Build
 import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,17 +26,23 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
@@ -63,9 +67,9 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.Widgets
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -75,6 +79,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -88,6 +93,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -276,8 +282,6 @@ fun SettingsScreen(
         )
     }
 
-    val motionScheme = MaterialTheme.motionScheme
-
     Scaffold(
         snackbarHost = {
             SnackbarHost(
@@ -387,8 +391,7 @@ fun SettingsScreen(
                                             text = stringResource(meta.subtitleRes),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis
+                                            softWrap = true
                                         )
                                     }
                                 }
@@ -398,47 +401,36 @@ fun SettingsScreen(
 
                     LazyColumn(
                         state = detailListState,
-                        contentPadding = PaddingValues(top = 8.dp, bottom = bottomClearance + 24.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        contentPadding = PaddingValues(top = 8.dp, bottom = bottomClearance + 32.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
+                            .testTag("settings_detail_list")
                     ) {
-                        item {
-                            AnimatedContent(
-                                targetState = selectedCategory,
-                                transitionSpec = {
-                                    (fadeIn(motionScheme.defaultEffectsSpec()) +
-                                        slideInVertically(motionScheme.fastSpatialSpec()) { it / 16 }) togetherWith
-                                        fadeOut(motionScheme.fastEffectsSpec())
-                                },
-                                label = "tabletSettingsPaneTransition"
-                            ) { activeCat ->
-                                SettingsDetailPaneContent(
-                                    category = activeCat,
-                                    prefs = prefs,
-                                    customSources = customSources,
-                                    localMangas = localMangas,
-                                    stats = stats,
-                                    formattedCacheSize = formattedCacheSize,
-                                    isImportingCbz = isImportingCbz,
-                                    sourceTestResults = sourceTestResults,
-                                    viewModel = viewModel,
-                                    onShowAddSource = { showAddSourceDialog = true },
-                                    onEditSource = { editingSource = it },
-                                    onOpenSourcesCatalog = onOpenSourcesCatalog,
-                                    onOpenManga = onOpenManga,
-                                    onLaunchCbzPicker = ::launchCbzImportPicker,
-                                    onShowPinSetup = { showPinDialog = true },
-                                    onOpenBrowser = onOpenBrowser,
-                                    onTriggerLockNow = onTriggerLockNow,
-                                    onExportBackup = ::launchDatedBackupExport,
-                                    onRestoreBackup = {
-                                        restoreBackupLauncher.launch(arrayOf("*/*"))
-                                    }
-                                )
+                        settingsDetailPaneItems(
+                            category = selectedCategory,
+                            prefs = prefs,
+                            customSources = customSources,
+                            localMangas = localMangas,
+                            stats = stats,
+                            formattedCacheSize = formattedCacheSize,
+                            isImportingCbz = isImportingCbz,
+                            sourceTestResults = sourceTestResults,
+                            viewModel = viewModel,
+                            onShowAddSource = { showAddSourceDialog = true },
+                            onEditSource = { editingSource = it },
+                            onOpenSourcesCatalog = onOpenSourcesCatalog,
+                            onOpenManga = onOpenManga,
+                            onLaunchCbzPicker = ::launchCbzImportPicker,
+                            onShowPinSetup = { showPinDialog = true },
+                            onOpenBrowser = onOpenBrowser,
+                            onTriggerLockNow = onTriggerLockNow,
+                            onExportBackup = ::launchDatedBackupExport,
+                            onRestoreBackup = {
+                                restoreBackupLauncher.launch(arrayOf("*/*"))
                             }
-                        }
+                        )
                     }
                 }
             } else {
@@ -472,7 +464,9 @@ fun SettingsScreen(
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("settings_category_row")
                     ) {
                         items(categories, key = { it.category.name }) { meta ->
                             val selected = selectedCategory == meta.category
@@ -483,7 +477,6 @@ fun SettingsScreen(
                                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                                 modifier = Modifier
                                     .minimumInteractiveComponentSize()
-                                    .animateContentSize(motionScheme.fastSpatialSpec())
                                     .testTag("settings_cat_${meta.category.name}")
                             ) {
                                 Icon(
@@ -509,45 +502,36 @@ fun SettingsScreen(
                             start = 16.dp,
                             end = 16.dp,
                             top = 4.dp,
-                            bottom = bottomClearance + 28.dp
+                            bottom = bottomClearance + 36.dp
                         ),
-                        modifier = Modifier.fillMaxSize()
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .testTag("settings_detail_list")
                     ) {
-                        item {
-                            AnimatedContent(
-                                targetState = selectedCategory,
-                                transitionSpec = {
-                                    (fadeIn(motionScheme.defaultEffectsSpec()) +
-                                        slideInVertically(motionScheme.fastSpatialSpec()) { it / 16 }) togetherWith
-                                        fadeOut(motionScheme.fastEffectsSpec())
-                                },
-                                label = "mobileSettingsPaneTransition"
-                            ) { activeCat ->
-                                SettingsDetailPaneContent(
-                                    category = activeCat,
-                                    prefs = prefs,
-                                    customSources = customSources,
-                                    localMangas = localMangas,
-                                    stats = stats,
-                                    formattedCacheSize = formattedCacheSize,
-                                    isImportingCbz = isImportingCbz,
-                                    sourceTestResults = sourceTestResults,
-                                    viewModel = viewModel,
-                                    onShowAddSource = { showAddSourceDialog = true },
-                                    onEditSource = { editingSource = it },
-                                    onOpenSourcesCatalog = onOpenSourcesCatalog,
-                                    onOpenManga = onOpenManga,
-                                    onLaunchCbzPicker = ::launchCbzImportPicker,
-                                    onShowPinSetup = { showPinDialog = true },
-                                    onOpenBrowser = onOpenBrowser,
-                                    onTriggerLockNow = onTriggerLockNow,
-                                    onExportBackup = ::launchDatedBackupExport,
-                                    onRestoreBackup = {
-                                        restoreBackupLauncher.launch(arrayOf("*/*"))
-                                    }
-                                )
+                        settingsDetailPaneItems(
+                            category = selectedCategory,
+                            prefs = prefs,
+                            customSources = customSources,
+                            localMangas = localMangas,
+                            stats = stats,
+                            formattedCacheSize = formattedCacheSize,
+                            isImportingCbz = isImportingCbz,
+                            sourceTestResults = sourceTestResults,
+                            viewModel = viewModel,
+                            onShowAddSource = { showAddSourceDialog = true },
+                            onEditSource = { editingSource = it },
+                            onOpenSourcesCatalog = onOpenSourcesCatalog,
+                            onOpenManga = onOpenManga,
+                            onLaunchCbzPicker = ::launchCbzImportPicker,
+                            onShowPinSetup = { showPinDialog = true },
+                            onOpenBrowser = onOpenBrowser,
+                            onTriggerLockNow = onTriggerLockNow,
+                            onExportBackup = ::launchDatedBackupExport,
+                            onRestoreBackup = {
+                                restoreBackupLauncher.launch(arrayOf("*/*"))
                             }
-                        }
+                        )
                     }
                 }
             }
@@ -583,81 +567,102 @@ fun SettingsScreen(
             pinInput != confirmPinInput
         val canConfirmPin = pinInput.length == 4 && confirmPinInput == pinInput
 
-        AlertDialog(
+        val pinSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+        ModalBottomSheet(
             onDismissRequest = { showPinDialog = false },
+            sheetState = pinSheetState,
             shape = MaterialTheme.shapes.extraLarge,
-            title = { Text(stringResource(R.string.setup_pin_dialog_title)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
-                        value = pinInput,
-                        onValueChange = { raw ->
-                            pinInput = raw.filter { it.isDigit() }.take(4)
-                        },
-                        label = { Text(stringResource(R.string.setup_pin_input_label)) },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                        shape = MaterialTheme.shapes.large,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("setup_pin_input")
-                    )
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .imePadding()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 28.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.setup_pin_dialog_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
 
-                    OutlinedTextField(
-                        value = confirmPinInput,
-                        onValueChange = { raw ->
-                            confirmPinInput = raw.filter { it.isDigit() }.take(4)
-                        },
-                        label = { Text(stringResource(R.string.setup_pin_confirm_label)) },
-                        singleLine = true,
-                        isError = mismatch,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                        shape = MaterialTheme.shapes.large,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("setup_pin_confirm_input")
-                    )
+                OutlinedTextField(
+                    value = pinInput,
+                    onValueChange = { raw ->
+                        pinInput = raw.filter { it.isDigit() }.take(4)
+                    },
+                    label = { Text(stringResource(R.string.setup_pin_input_label)) },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    shape = MaterialTheme.shapes.large,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("setup_pin_input")
+                )
 
-                    if (mismatch) {
-                        Text(
-                            text = stringResource(R.string.setup_pin_mismatch),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.error
-                        )
+                OutlinedTextField(
+                    value = confirmPinInput,
+                    onValueChange = { raw ->
+                        confirmPinInput = raw.filter { it.isDigit() }.take(4)
+                    },
+                    label = { Text(stringResource(R.string.setup_pin_confirm_label)) },
+                    singleLine = true,
+                    isError = mismatch,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    shape = MaterialTheme.shapes.large,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("setup_pin_confirm_input")
+                )
+
+                if (mismatch) {
+                    Text(
+                        text = stringResource(R.string.setup_pin_mismatch),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TextButton(
+                        onClick = { showPinDialog = false },
+                        shapes = ButtonDefaults.shapes()
+                    ) {
+                        Text(stringResource(R.string.cancel_action))
+                    }
+                    Button(
+                        onClick = {
+                            if (canConfirmPin) {
+                                viewModel.configureAppLock(true, pinInput)
+                                showPinDialog = false
+                            }
+                        },
+                        enabled = canConfirmPin,
+                        shapes = ButtonDefaults.shapes(),
+                        modifier = Modifier.testTag("confirm_setup_pin_button")
+                    ) {
+                        Text(stringResource(R.string.save_action))
                     }
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (canConfirmPin) {
-                            viewModel.configureAppLock(true, pinInput)
-                            showPinDialog = false
-                        }
-                    },
-                    enabled = canConfirmPin,
-                    shapes = ButtonDefaults.shapes(),
-                    modifier = Modifier.testTag("confirm_setup_pin_button")
-                ) {
-                    Text(stringResource(R.string.save_action))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showPinDialog = false },
-                    shapes = ButtonDefaults.shapes()
-                ) {
-                    Text(stringResource(R.string.cancel_action))
-                }
             }
-        )
+        }
     }
 }
 
-@Composable
-private fun SettingsDetailPaneContent(
+private fun LazyListScope.settingsDetailPaneItems(
     category: SettingsCategory,
     prefs: AppPreferences,
     customSources: List<CustomMangaSource>,
@@ -678,17 +683,14 @@ private fun SettingsDetailPaneContent(
     onExportBackup: () -> Unit,
     onRestoreBackup: () -> Unit
 ) {
-    val context = LocalContext.current
-
-    Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        when (category) {
-            SettingsCategory.APPEARANCE -> {
+    when (category) {
+        SettingsCategory.APPEARANCE -> {
+            item(key = "appearance_header") {
                 SectionHeadline(stringResource(R.string.settings_cat_appearance))
+            }
 
-                // 1. Theme & Expressive Color Palettes
+            // 1. Theme & Expressive Color Palettes
+            item(key = "appearance_theme_palette") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.Palette,
                     title = stringResource(R.string.settings_group_theme_palette)
@@ -696,7 +698,8 @@ private fun SettingsDetailPaneContent(
                     ChoiceGroupLabel(stringResource(R.string.theme_mode_label))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         AppThemeMode.entries.forEach { mode ->
                             val labelRes = when (mode) {
@@ -770,8 +773,10 @@ private fun SettingsDetailPaneContent(
                         }
                     }
                 }
+            }
 
-                // 2. Cards, Covers & Badges
+            // 2. Cards, Covers & Badges
+            item(key = "appearance_cards_covers") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.DashboardCustomize,
                     title = stringResource(R.string.settings_group_cards_covers)
@@ -779,7 +784,8 @@ private fun SettingsDetailPaneContent(
                     ChoiceGroupLabel(stringResource(R.string.cover_corner_style_label))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         CoverCornerStyle.entries.forEach { style ->
                             val labelRes = when (style) {
@@ -820,8 +826,10 @@ private fun SettingsDetailPaneContent(
                         tag = "switch_progress_covers"
                     )
                 }
+            }
 
-                // 3. Navigation Dock & Default Start Tab
+            // 3. Navigation Dock & Default Start Tab
+            item(key = "appearance_navigation") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.Navigation,
                     title = stringResource(R.string.settings_group_navigation)
@@ -829,7 +837,8 @@ private fun SettingsDetailPaneContent(
                     ChoiceGroupLabel(stringResource(R.string.nav_labels_behavior_label))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         NavLabelBehavior.entries.forEach { behavior ->
                             val labelRes = when (behavior) {
@@ -867,8 +876,11 @@ private fun SettingsDetailPaneContent(
                         }
                     }
                 }
+            }
 
-                // 4. Material Design 3 Expressive Widgets
+            // 4. Material Design 3 Expressive Widgets
+            item(key = "appearance_widgets") {
+                val context = LocalContext.current
                 SettingsGroupCard(
                     icon = Icons.Outlined.Widgets,
                     title = stringResource(R.string.settings_group_widgets)
@@ -889,10 +901,14 @@ private fun SettingsDetailPaneContent(
                     )
                 }
             }
+        }
 
-            SettingsCategory.READER -> {
+        SettingsCategory.READER -> {
+            item(key = "reader_header") {
                 SectionHeadline(stringResource(R.string.settings_cat_reader))
+            }
 
+            item(key = "reader_modes") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.AutoStories,
                     title = stringResource(R.string.settings_group_reading_mode)
@@ -900,7 +916,8 @@ private fun SettingsDetailPaneContent(
                     ChoiceGroupLabel(stringResource(R.string.default_reader_mode_label))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         ReaderMode.entries.forEach { mode ->
                             val labelRes = when (mode) {
@@ -960,7 +977,9 @@ private fun SettingsDetailPaneContent(
                         }
                     }
                 }
+            }
 
+            item(key = "reader_filters") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.Palette,
                     title = stringResource(R.string.settings_group_visual_filters)
@@ -1009,7 +1028,9 @@ private fun SettingsDetailPaneContent(
                         tag = "switch_reader_invert"
                     )
                 }
+            }
 
+            item(key = "reader_controls") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.Tune,
                     title = stringResource(R.string.settings_group_reader_controls)
@@ -1065,10 +1086,14 @@ private fun SettingsDetailPaneContent(
                     )
                 }
             }
+        }
 
-            SettingsCategory.EXPLORE -> {
+        SettingsCategory.EXPLORE -> {
+            item(key = "explore_header") {
                 SectionHeadline(stringResource(R.string.settings_cat_explore))
+            }
 
+            item(key = "explore_display") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.Explore,
                     title = stringResource(R.string.settings_group_explore_display)
@@ -1076,7 +1101,8 @@ private fun SettingsDetailPaneContent(
                     ChoiceGroupLabel(stringResource(R.string.layout_mode_label))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         ExploreLayoutMode.entries.forEach { mode ->
                             val labelRes = when (mode) {
@@ -1135,7 +1161,9 @@ private fun SettingsDetailPaneContent(
                         }
                     }
                 }
+            }
 
+            item(key = "explore_sections") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.DashboardCustomize,
                     title = stringResource(R.string.settings_group_explore_sections)
@@ -1177,11 +1205,15 @@ private fun SettingsDetailPaneContent(
                     )
                 }
             }
+        }
 
-            SettingsCategory.SOURCES -> {
+        SettingsCategory.SOURCES -> {
+            item(key = "sources_header") {
                 SectionHeadline(stringResource(R.string.settings_cat_sources))
+            }
 
-                // Hero Card to Open Full Catalog & Site Connectivity Tester
+            // Hero Card to Open Full Catalog & Site Connectivity Tester
+            item(key = "sources_catalog") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.Language,
                     title = stringResource(R.string.manage_sources_catalog_title)
@@ -1189,7 +1221,8 @@ private fun SettingsDetailPaneContent(
                     Text(
                         text = stringResource(R.string.manage_sources_catalog_sub),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        softWrap = true
                     )
 
                     FlowRow(
@@ -1232,7 +1265,7 @@ private fun SettingsDetailPaneContent(
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f))
 
-                    // Primary Built-in MangaDex Catalog Card
+                    // Primary Built-in MangaDex Catalog Card (Two-tier so title/subtitle never squeeze on compact screens)
                     Surface(
                         shape = MaterialTheme.shapes.large,
                         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -1240,35 +1273,43 @@ private fun SettingsDetailPaneContent(
                             .fillMaxWidth()
                             .testTag("source_builtin_mangadex")
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.padding(14.dp)
                         ) {
-                            SourceFaviconBadge(
-                                name = "MangaDex",
-                                baseUrl = "https://mangadex.org",
-                                size = 38.dp
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = stringResource(R.string.settings_mangadex_title),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = stringResource(R.string.settings_mangadex_sub),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            IconButton(
-                                onClick = { onOpenBrowser("https://mangadex.org", "MangaDex") }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.OpenInBrowser,
-                                    contentDescription = stringResource(R.string.open_in_webview)
+                                SourceFaviconBadge(
+                                    name = "MangaDex",
+                                    baseUrl = "https://mangadex.org",
+                                    size = 38.dp
                                 )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = stringResource(R.string.settings_mangadex_title),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        softWrap = true
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = stringResource(R.string.settings_mangadex_sub),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        softWrap = true
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { onOpenBrowser("https://mangadex.org", "MangaDex") }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.OpenInBrowser,
+                                        contentDescription = stringResource(R.string.open_in_webview)
+                                    )
+                                }
                             }
                             Surface(
                                 shape = CircleShape,
@@ -1292,7 +1333,9 @@ private fun SettingsDetailPaneContent(
                         tag = "source_builtin_kitsu"
                     )
                 }
+            }
 
+            item(key = "sources_custom") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.Public,
                     title = stringResource(R.string.settings_custom_sources_header, customSources.size)
@@ -1431,10 +1474,14 @@ private fun SettingsDetailPaneContent(
                     }
                 }
             }
+        }
 
-            SettingsCategory.NETWORK -> {
+        SettingsCategory.NETWORK -> {
+            item(key = "network_header") {
                 SectionHeadline(stringResource(R.string.settings_cat_network))
+            }
 
+            item(key = "network_adshield") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.Shield,
                     title = stringResource(R.string.settings_group_ad_protection)
@@ -1464,7 +1511,9 @@ private fun SettingsDetailPaneContent(
                         tag = "switch_popup_block"
                     )
                 }
+            }
 
+            item(key = "network_dns_ua") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.Public,
                     title = stringResource(R.string.settings_group_dns_browser)
@@ -1527,10 +1576,15 @@ private fun SettingsDetailPaneContent(
                     }
                 }
             }
+        }
 
-            SettingsCategory.SECURITY -> {
+        SettingsCategory.SECURITY -> {
+            item(key = "security_header") {
                 SectionHeadline(stringResource(R.string.settings_cat_security))
+            }
 
+            item(key = "security_applock") {
+                val context = LocalContext.current
                 val biometricState = remember(context) {
                     BiometricAuthHelper.inspectCapability(context)
                 }
@@ -1590,7 +1644,9 @@ private fun SettingsDetailPaneContent(
                         )
                     }
                 }
+            }
 
+            item(key = "security_privacy") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.VisibilityOff,
                     title = stringResource(R.string.settings_group_privacy)
@@ -1612,11 +1668,15 @@ private fun SettingsDetailPaneContent(
                     )
                 }
             }
+        }
 
-            SettingsCategory.BACKUP -> {
+        SettingsCategory.BACKUP -> {
+            item(key = "backup_header") {
                 SectionHeadline(stringResource(R.string.settings_cat_backup))
+            }
 
-                // 1. Local CBZ & ZIP Library Import (Moved cleanly from ExploreScreen)
+            // 1. Local CBZ & ZIP Library Import (Moved cleanly from ExploreScreen)
+            item(key = "backup_local_cbz") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.FolderZip,
                     title = stringResource(R.string.settings_group_local_cbz)
@@ -1624,7 +1684,8 @@ private fun SettingsDetailPaneContent(
                     Text(
                         text = stringResource(R.string.settings_local_cbz_sub),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        softWrap = true
                     )
 
                     Button(
@@ -1674,16 +1735,16 @@ private fun SettingsDetailPaneContent(
                                 color = MaterialTheme.colorScheme.surfaceContainer,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
+                                    Column(modifier = Modifier.fillMaxWidth()) {
                                         Text(
                                             text = localItem.title,
                                             style = MaterialTheme.typography.titleSmall,
-                                            color = MaterialTheme.colorScheme.onSurface
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            softWrap = true
                                         )
                                         Text(
                                             text = localItem.badgeText,
@@ -1692,32 +1753,40 @@ private fun SettingsDetailPaneContent(
                                         )
                                     }
 
-                                    FilledTonalButton(
-                                        onClick = { onOpenManga(localItem) },
-                                        shapes = ButtonDefaults.shapes(),
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                        modifier = Modifier.minimumInteractiveComponentSize()
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text(stringResource(R.string.settings_open_manga_action))
-                                    }
+                                        FilledTonalButton(
+                                            onClick = { onOpenManga(localItem) },
+                                            shapes = ButtonDefaults.shapes(),
+                                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                                            modifier = Modifier.minimumInteractiveComponentSize()
+                                        ) {
+                                            Text(stringResource(R.string.settings_open_manga_action))
+                                        }
 
-                                    IconButton(
-                                        onClick = { viewModel.deleteLocalManga(localItem) },
-                                        modifier = Modifier.testTag("delete_local_settings_${localItem.id}")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.DeleteOutline,
-                                            contentDescription = stringResource(R.string.delete_local_manga),
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
+                                        IconButton(
+                                            onClick = { viewModel.deleteLocalManga(localItem) },
+                                            modifier = Modifier.testTag("delete_local_settings_${localItem.id}")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.DeleteOutline,
+                                                contentDescription = stringResource(R.string.delete_local_manga),
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
+            }
 
-                // 2. Backup Export, Restore & Statistics
+            // 2. Backup Export, Restore & Statistics
+            item(key = "backup_files") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.Backup,
                     title = stringResource(R.string.settings_group_backup_files)
@@ -1788,8 +1857,10 @@ private fun SettingsDetailPaneContent(
                         }
                     }
                 }
+            }
 
-                // 3. Cache & Storage Maintenance
+            // 3. Cache & Storage Maintenance
+            item(key = "backup_cache") {
                 SettingsGroupCard(
                     icon = Icons.Outlined.CleaningServices,
                     title = stringResource(R.string.settings_group_cache)
@@ -1804,7 +1875,10 @@ private fun SettingsDetailPaneContent(
                     ) {
                         Icon(imageVector = Icons.Outlined.CleaningServices, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.clear_cache_button_format, formattedCacheSize))
+                        Text(
+                            text = stringResource(R.string.clear_cache_button_format, formattedCacheSize),
+                            softWrap = true
+                        )
                     }
 
                     Text(

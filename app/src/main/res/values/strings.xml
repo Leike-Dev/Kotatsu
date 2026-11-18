@@ -100,6 +100,7 @@
     <string name="source_url_label">Endereço principal (URL)</string>
     <string name="source_url_placeholder">https://exemplo.com</string>
     <string name="source_search_template_label">Modelo de URL de busca (use {query})</string>
+    <string name="source_search_template_short_label">URL de busca ({query})</string>
     <string name="source_search_template_hint">Opcional — ex.: https://exemplo.com/?s={query}</string>
     <string name="source_presets_label">Modelos prontos de catálogo</string>
 

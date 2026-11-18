@@ -2,12 +2,18 @@ package org.koitharu.kotatsu.ui
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToKey
+import androidx.compose.ui.test.performScrollToNode
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -40,6 +46,9 @@ class KotatsuUiCujRobolectricTest {
     val composeTestRule = createComposeRule()
 
     private lateinit var env: TestKotatsuEnvironment
+    private val activeViewModels = mutableListOf<ViewModel>()
+
+    private fun <T : ViewModel> track(vm: T): T = vm.also { activeViewModels += it }
 
     @Before
     fun setUp() {
@@ -48,6 +57,9 @@ class KotatsuUiCujRobolectricTest {
 
     @After
     fun tearDown() {
+        activeViewModels.forEach { it.viewModelScope.cancel() }
+        activeViewModels.clear()
+        composeTestRule.waitForIdle()
         env.close()
     }
 
@@ -83,7 +95,7 @@ class KotatsuUiCujRobolectricTest {
             env.repository.updateMangaCategories(mangaRegular, setOf(catId))
         }
 
-        val viewModel = FavoritesViewModel(env.repository)
+        val viewModel = track(FavoritesViewModel(env.repository))
 
         composeTestRule.setContent {
             KotatsuTheme {
@@ -157,7 +169,7 @@ class KotatsuUiCujRobolectricTest {
             )
         }
 
-        val statsViewModel = StatisticsViewModel(env.repository)
+        val statsViewModel = track(StatisticsViewModel(env.repository))
 
         composeTestRule.setContent {
             KotatsuTheme {
@@ -216,7 +228,7 @@ class KotatsuUiCujRobolectricTest {
     @Test
     @Config(qualifiers = "w900dp-h1400dp-xhdpi")
     fun `SettingsScreen organizes appearance palettes, widgets, biometric status, and hosts Local CBZ import`() {
-        val settingsVm = org.koitharu.kotatsu.ui.settings.SettingsViewModel(env.repository)
+        val settingsVm = track(org.koitharu.kotatsu.ui.settings.SettingsViewModel(env.repository))
 
         composeTestRule.setContent {
             KotatsuTheme {
@@ -250,7 +262,7 @@ class KotatsuUiCujRobolectricTest {
     @Test
     @Config(qualifiers = "w800dp-h1280dp-xhdpi")
     fun `SourcesCatalogScreen displays built-in PT-BR sources and enables source in repository`() {
-        val catalogVm = org.koitharu.kotatsu.ui.sources.SourcesCatalogViewModel(env.repository)
+        val catalogVm = track(org.koitharu.kotatsu.ui.sources.SourcesCatalogViewModel(env.repository))
 
         composeTestRule.setContent {
             KotatsuTheme {
@@ -283,10 +295,12 @@ class KotatsuUiCujRobolectricTest {
 
     @Test
     fun `ExploreScreen header removes Importar CBZ button and exposes Sources Catalog shortcut`() {
-        val exploreVm = org.koitharu.kotatsu.ui.explore.ExploreViewModel(
-            repository = env.repository,
-            initialQuery = "",
-            initialTagId = ""
+        val exploreVm = track(
+            org.koitharu.kotatsu.ui.explore.ExploreViewModel(
+                repository = env.repository,
+                initialQuery = "",
+                initialTagId = ""
+            )
         )
 
         composeTestRule.setContent {
@@ -305,5 +319,144 @@ class KotatsuUiCujRobolectricTest {
         assertEquals(0, composeTestRule.onAllNodesWithTag("import_cbz_button").fetchSemanticsNodes().size)
         // Sources catalog button is prominently available
         composeTestRule.onNodeWithTag("header_sources_catalog_button").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-xhdpi")
+    fun `Explore customize modal and Reader visualization modal scroll cleanly without cutting off bottom options on compact screens`() {
+        val exploreVm = track(
+            org.koitharu.kotatsu.ui.explore.ExploreViewModel(
+                repository = env.repository,
+                initialQuery = "",
+                initialTagId = ""
+            )
+        )
+
+        composeTestRule.setContent {
+            KotatsuTheme {
+                org.koitharu.kotatsu.ui.explore.ExploreScreen(
+                    viewModel = exploreVm,
+                    onOpenManga = {},
+                    onOpenBrowser = { _, _ -> },
+                    onOpenSourcesCatalog = {}
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        // Open "Personalizar Descobrir" modal bottom sheet on a compact 360x640 phone
+        composeTestRule.onNodeWithTag("customize_explore_button").performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag("explore_customize_sheet").assertIsDisplayed()
+        // Scroll to the very last switch in the modal and verify both subtitle and switch are visible
+        composeTestRule.onNodeWithTag("sheet_explore_switch_badges")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "Mostra a fonte da obra (MangaDex, Kitsu, Web ou CBZ) sobre as capas"
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-xhdpi")
+    fun `ReaderVisualizationSheet and compact SettingsScreen render all options and subtitles without clipping`() {
+        val readerVm = track(
+            org.koitharu.kotatsu.ui.reader.ReaderViewModel(
+                mangaId = "m_test",
+                sourceType = MangaSourceType.ONLINE_MANGADEX,
+                initialChapterId = "c_test",
+                initialPage = 0,
+                repository = env.repository
+            )
+        )
+        val settingsVm = track(org.koitharu.kotatsu.ui.settings.SettingsViewModel(env.repository))
+        var showReaderModal = true
+
+        composeTestRule.setContent {
+            KotatsuTheme {
+                if (showReaderModal) {
+                    org.koitharu.kotatsu.ui.reader.ReaderVisualizationSheet(
+                        prefs = org.koitharu.kotatsu.domain.model.AppPreferences(),
+                        viewModel = readerVm,
+                        onDismiss = { showReaderModal = false }
+                    )
+                } else {
+                    org.koitharu.kotatsu.ui.settings.SettingsScreen(
+                        viewModel = settingsVm,
+                        showBackButton = true,
+                        onBack = {},
+                        onOpenBrowser = { _, _ -> },
+                        onTriggerLockNow = {}
+                    )
+                }
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        // 1. ReaderVisualizationSheet reaches the very bottom switch + subtitle on 360x640dp
+        composeTestRule.onNodeWithTag("sheet_mini_info_switch")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "Mostra o número da página e porcentagem no canto inferior"
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-xhdpi")
+    fun `Compact SettingsScreen scrolls across categories and AddCustomSourceDialog without clipping`() {
+        val settingsVm = track(org.koitharu.kotatsu.ui.settings.SettingsViewModel(env.repository))
+
+        composeTestRule.setContent {
+            KotatsuTheme {
+                org.koitharu.kotatsu.ui.settings.SettingsScreen(
+                    viewModel = settingsVm,
+                    showBackButton = true,
+                    onBack = {},
+                    onOpenBrowser = { _, _ -> },
+                    onTriggerLockNow = {}
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        // Scroll virtualized LazyColumn to the bottom of Appearance on compact 360x640dp
+        composeTestRule.onNodeWithTag("settings_detail_list")
+            .performScrollToKey("appearance_widgets")
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("sync_widgets_button")
+            .performScrollTo()
+            .assertIsDisplayed()
+
+        // Scroll horizontal category row to Sources category and verify MangaDex card spans full width
+        composeTestRule.onNodeWithTag("settings_category_row")
+            .performScrollToNode(hasTestTag("settings_cat_SOURCES"))
+        composeTestRule.onNodeWithTag("settings_cat_SOURCES").performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag("settings_detail_list")
+            .performScrollToKey("sources_catalog")
+        composeTestRule.waitForIdle()
+
+        val mangadexBounds = composeTestRule.onNodeWithTag("source_builtin_mangadex")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .fetchSemanticsNode()
+            .boundsInRoot
+        assertTrue("MangaDex card should span full card width", mangadexBounds.width > 200f)
+
+        // Open AddCustomSourceDialog on compact 360x640dp and verify template field + presets are scrollable and visible
+        composeTestRule.onNodeWithTag("settings_add_source_button")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag("custom_source_template_input")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("OPDS")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 }

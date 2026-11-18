@@ -2,7 +2,6 @@
 
 package org.koitharu.kotatsu.ui.settings
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -146,7 +145,6 @@ internal fun ExpressiveOptionToggle(
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
         modifier = Modifier
             .minimumInteractiveComponentSize()
-            .animateContentSize(MaterialTheme.motionScheme.fastSpatialSpec())
             .testTag(tag)
     ) {
         if (selected) {
@@ -157,7 +155,10 @@ internal fun ExpressiveOptionToggle(
             )
             Spacer(modifier = Modifier.width(6.dp))
         }
-        Text(text = label)
+        Text(
+            text = label,
+            softWrap = true
+        )
     }
 }
 
@@ -178,20 +179,24 @@ internal fun SettingsSwitchRow(
             .alpha(if (enabled) 1f else 0.55f)
             .clip(MaterialTheme.shapes.medium)
             .clickable(enabled = enabled) { onCheckedChange(!checked) }
-            .padding(vertical = 6.dp)
+            .padding(vertical = 8.dp)
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                softWrap = true
             )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (subtitle.isNotBlank()) {
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    softWrap = true
+                )
+            }
         }
         Spacer(modifier = Modifier.width(14.dp))
         Switch(
@@ -224,7 +229,7 @@ internal fun PaletteSwatchCard(
             BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
         },
         modifier = Modifier
-            .widthIn(min = 148.dp)
+            .widthIn(min = 136.dp)
             .clip(MaterialTheme.shapes.large)
             .clickable(onClick = onClick)
             .minimumInteractiveComponentSize()
@@ -232,25 +237,25 @@ internal fun PaletteSwatchCard(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
                 Box(
                     modifier = Modifier
-                        .size(18.dp)
+                        .size(16.dp)
                         .clip(CircleShape)
                         .background(swatch.primary)
                 )
                 Box(
                     modifier = Modifier
-                        .size(18.dp)
+                        .size(16.dp)
                         .clip(CircleShape)
                         .background(swatch.secondary)
                 )
                 Box(
                     modifier = Modifier
-                        .size(18.dp)
+                        .size(16.dp)
                         .clip(CircleShape)
                         .background(swatch.tertiary)
                 )
@@ -262,7 +267,9 @@ internal fun PaletteSwatchCard(
                     MaterialTheme.colorScheme.onSecondaryContainer
                 } else {
                     MaterialTheme.colorScheme.onSurface
-                }
+                },
+                softWrap = true,
+                modifier = Modifier.weight(1f, fill = false)
             )
             if (selected) {
                 Icon(

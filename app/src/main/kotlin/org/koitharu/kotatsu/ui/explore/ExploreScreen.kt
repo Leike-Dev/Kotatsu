@@ -6,7 +6,6 @@
 
 package org.koitharu.kotatsu.ui.explore
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,19 +15,24 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Add
@@ -63,6 +67,7 @@ import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.TonalToggleButton
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -608,8 +613,10 @@ fun ExploreScreen(
     }
 
     if (showCustomizeSheet) {
+        val customizeSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
             onDismissRequest = { showCustomizeSheet = false },
+            sheetState = customizeSheetState,
             shape = MaterialTheme.shapes.extraLarge,
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ) {
@@ -617,8 +624,11 @@ fun ExploreScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(horizontal = 20.dp)
                     .padding(bottom = 32.dp)
+                    .testTag("explore_customize_sheet")
             ) {
                 Text(
                     text = stringResource(R.string.customize_explore_title),
@@ -633,7 +643,8 @@ fun ExploreScreen(
                 )
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     ExploreLayoutMode.entries.forEach { mode ->
                         val selected = prefs.exploreLayoutMode == mode
@@ -647,8 +658,9 @@ fun ExploreScreen(
                             checked = selected,
                             onCheckedChange = { viewModel.setExploreLayoutMode(mode) },
                             shapes = ToggleButtonDefaults.shapes(),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                             modifier = Modifier
-                                .animateContentSize(MaterialTheme.motionScheme.fastSpatialSpec())
+                                .minimumInteractiveComponentSize()
                                 .testTag("sheet_explore_layout_${mode.name}")
                         ) {
                             if (selected) {
@@ -659,7 +671,10 @@ fun ExploreScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                             }
-                            Text(stringResource(labelRes))
+                            Text(
+                                text = stringResource(labelRes),
+                                softWrap = true
+                            )
                         }
                     }
                 }
@@ -674,28 +689,38 @@ fun ExploreScreen(
 
                 QuickCustomizeSwitch(
                     label = stringResource(R.string.toggle_spotlight_label),
+                    subtitle = stringResource(R.string.toggle_spotlight_sub),
                     checked = prefs.showExploreSpotlight,
-                    onCheckedChange = viewModel::setShowSpotlight
+                    onCheckedChange = viewModel::setShowSpotlight,
+                    testTagName = "sheet_explore_switch_spotlight"
                 )
                 QuickCustomizeSwitch(
                     label = stringResource(R.string.toggle_sources_bar_label),
+                    subtitle = stringResource(R.string.toggle_sources_bar_sub),
                     checked = prefs.showExploreSourcesBar,
-                    onCheckedChange = viewModel::setShowSourcesBar
+                    onCheckedChange = viewModel::setShowSourcesBar,
+                    testTagName = "sheet_explore_switch_sources"
                 )
                 QuickCustomizeSwitch(
                     label = stringResource(R.string.toggle_genres_strip_label),
+                    subtitle = stringResource(R.string.toggle_genres_strip_sub),
                     checked = prefs.showExploreGenres,
-                    onCheckedChange = viewModel::setShowGenres
+                    onCheckedChange = viewModel::setShowGenres,
+                    testTagName = "sheet_explore_switch_genres"
                 )
                 QuickCustomizeSwitch(
                     label = stringResource(R.string.toggle_local_section_label),
+                    subtitle = stringResource(R.string.toggle_local_section_sub),
                     checked = prefs.showExploreLocalSection,
-                    onCheckedChange = viewModel::setShowLocalSection
+                    onCheckedChange = viewModel::setShowLocalSection,
+                    testTagName = "sheet_explore_switch_local"
                 )
                 QuickCustomizeSwitch(
                     label = stringResource(R.string.toggle_badges_label),
+                    subtitle = stringResource(R.string.toggle_badges_sub),
                     checked = prefs.showSourceBadges,
-                    onCheckedChange = viewModel::setShowSourceBadges
+                    onCheckedChange = viewModel::setShowSourceBadges,
+                    testTagName = "sheet_explore_switch_badges"
                 )
             }
         }
@@ -705,8 +730,10 @@ fun ExploreScreen(
 @Composable
 private fun QuickCustomizeSwitch(
     label: String,
+    subtitle: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    testTagName: String
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -715,17 +742,30 @@ private fun QuickCustomizeSwitch(
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 4.dp)
+            .padding(vertical = 6.dp)
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f)
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                softWrap = true
+            )
+            if (subtitle.isNotBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    softWrap = true
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(14.dp))
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.testTag(testTagName)
         )
     }
 }

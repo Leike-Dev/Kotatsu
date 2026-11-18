@@ -472,7 +472,7 @@ private fun IncognitoStatusBanner(onDisable: () -> Unit) {
                 Text(
                     text = stringResource(R.string.incognito_active_banner),
                     style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1
+                    maxLines = 2
                 )
             }
             TextButton(onClick = onDisable) {

@@ -80,6 +80,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.TonalToggleButton
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -883,14 +884,17 @@ fun ReaderScreen(
 
     // Quick Chapter Selector Sheet
     if (showChaptersSheet) {
+        val chaptersSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
             onDismissRequest = { showChaptersSheet = false },
+            sheetState = chaptersSheetState,
             shape = MaterialTheme.shapes.extraLarge,
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(horizontal = 20.dp)
                     .padding(bottom = 28.dp)
             ) {
@@ -976,13 +980,15 @@ fun ReaderScreen(
 }
 
 @Composable
-private fun ReaderVisualizationSheet(
+internal fun ReaderVisualizationSheet(
     prefs: AppPreferences,
     viewModel: ReaderViewModel,
     onDismiss: () -> Unit
 ) {
+    val configSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = configSheetState,
         shape = MaterialTheme.shapes.extraLarge,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
@@ -990,8 +996,10 @@ private fun ReaderVisualizationSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
+                .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 36.dp)
+                .testTag("reader_visualization_sheet")
         ) {
             Text(
                 text = stringResource(R.string.reader_settings_action),
@@ -1009,7 +1017,8 @@ private fun ReaderVisualizationSheet(
             Spacer(modifier = Modifier.height(8.dp))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 ReaderMode.entries.forEach { mode ->
                     val selected = prefs.defaultReaderMode == mode
@@ -1023,6 +1032,7 @@ private fun ReaderVisualizationSheet(
                         checked = selected,
                         onCheckedChange = { viewModel.setReaderMode(mode) },
                         shapes = ToggleButtonDefaults.shapes(),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                         modifier = Modifier
                             .minimumInteractiveComponentSize()
                             .testTag("sheet_reader_mode_${mode.name}")
@@ -1035,7 +1045,10 @@ private fun ReaderVisualizationSheet(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                         }
-                        Text(stringResource(labelRes))
+                        Text(
+                            text = stringResource(labelRes),
+                            softWrap = true
+                        )
                     }
                 }
             }
@@ -1051,7 +1064,8 @@ private fun ReaderVisualizationSheet(
             Spacer(modifier = Modifier.height(8.dp))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 ReaderScaleMode.entries.forEach { scaleMode ->
                     val selected = prefs.readerScaleMode == scaleMode
@@ -1065,6 +1079,7 @@ private fun ReaderVisualizationSheet(
                         checked = selected,
                         onCheckedChange = { viewModel.setReaderScaleMode(scaleMode) },
                         shapes = ToggleButtonDefaults.shapes(),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                         modifier = Modifier
                             .minimumInteractiveComponentSize()
                             .testTag("sheet_reader_scale_${scaleMode.name}")
@@ -1077,7 +1092,10 @@ private fun ReaderVisualizationSheet(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                         }
-                        Text(stringResource(labelRes))
+                        Text(
+                            text = stringResource(labelRes),
+                            softWrap = true
+                        )
                     }
                 }
             }
@@ -1093,7 +1111,8 @@ private fun ReaderVisualizationSheet(
             Spacer(modifier = Modifier.height(8.dp))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 ReaderBackground.entries.forEach { bg ->
                     val selected = prefs.readerBackground == bg
@@ -1107,6 +1126,7 @@ private fun ReaderVisualizationSheet(
                         checked = selected,
                         onCheckedChange = { viewModel.setReaderBackground(bg) },
                         shapes = ToggleButtonDefaults.shapes(),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                         modifier = Modifier
                             .minimumInteractiveComponentSize()
                             .testTag("sheet_reader_bg_${bg.name}")
@@ -1119,7 +1139,10 @@ private fun ReaderVisualizationSheet(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                         }
-                        Text(stringResource(labelRes))
+                        Text(
+                            text = stringResource(labelRes),
+                            softWrap = true
+                        )
                     }
                 }
             }
@@ -1143,12 +1166,15 @@ private fun ReaderVisualizationSheet(
             ) {
                 Text(
                     text = stringResource(R.string.reader_brightness_dim_label),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    softWrap = true,
+                    modifier = Modifier.weight(1f)
                 )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "${(prefs.readerBrightnessDim * 100).roundToInt()}%",
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
@@ -1163,12 +1189,14 @@ private fun ReaderVisualizationSheet(
 
             ReaderSwitchRow(
                 label = stringResource(R.string.reader_grayscale_label),
+                subtitle = stringResource(R.string.reader_grayscale_sub),
                 checked = prefs.readerGrayscale,
                 onCheckedChange = viewModel::setGrayscale,
                 testTagName = "sheet_grayscale_switch"
             )
             ReaderSwitchRow(
                 label = stringResource(R.string.reader_invert_label),
+                subtitle = stringResource(R.string.reader_invert_sub),
                 checked = prefs.readerInvertColors,
                 onCheckedChange = viewModel::setInvertColors,
                 testTagName = "sheet_invert_switch"
@@ -1181,36 +1209,42 @@ private fun ReaderVisualizationSheet(
             // 5. Controls & Page Aids
             ReaderSwitchRow(
                 label = stringResource(R.string.reader_thumbnails_toggle),
+                subtitle = stringResource(R.string.reader_thumbnails_sub),
                 checked = prefs.showReaderThumbnails,
                 onCheckedChange = viewModel::setShowThumbnails,
                 testTagName = "sheet_thumbnails_switch"
             )
             ReaderSwitchRow(
                 label = stringResource(R.string.reader_webtoon_gap_label),
+                subtitle = stringResource(R.string.reader_webtoon_gap_sub),
                 checked = prefs.webtoonSeamlessGap,
                 onCheckedChange = viewModel::setWebtoonSeamlessGap,
                 testTagName = "sheet_webtoon_gap_switch"
             )
             ReaderSwitchRow(
                 label = stringResource(R.string.reader_keep_screen_on_label),
+                subtitle = stringResource(R.string.reader_keep_screen_on_sub),
                 checked = prefs.keepScreenOn,
                 onCheckedChange = viewModel::setKeepScreenOn,
                 testTagName = "sheet_keep_screen_on_switch"
             )
             ReaderSwitchRow(
                 label = stringResource(R.string.reader_volume_keys_label),
+                subtitle = stringResource(R.string.reader_volume_keys_sub),
                 checked = prefs.volumeKeysNavigation,
                 onCheckedChange = viewModel::setVolumeKeysNavigation,
                 testTagName = "sheet_volume_keys_switch"
             )
             ReaderSwitchRow(
                 label = stringResource(R.string.reader_transitions_label),
+                subtitle = stringResource(R.string.reader_transitions_sub),
                 checked = prefs.pageTransitions,
                 onCheckedChange = viewModel::setPageTransitions,
                 testTagName = "sheet_transitions_switch"
             )
             ReaderSwitchRow(
                 label = stringResource(R.string.reader_mini_info_label),
+                subtitle = stringResource(R.string.reader_mini_info_sub),
                 checked = prefs.showReaderMiniInfo,
                 onCheckedChange = viewModel::setShowMiniInfo,
                 testTagName = "sheet_mini_info_switch"
@@ -1222,6 +1256,7 @@ private fun ReaderVisualizationSheet(
 @Composable
 private fun ReaderSwitchRow(
     label: String,
+    subtitle: String = "",
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     testTagName: String
@@ -1231,15 +1266,28 @@ private fun ReaderSwitchRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 8.dp)
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f)
-        )
-        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                softWrap = true
+            )
+            if (subtitle.isNotBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    softWrap = true
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(14.dp))
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
