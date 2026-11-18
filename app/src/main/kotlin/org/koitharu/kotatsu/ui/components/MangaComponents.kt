@@ -85,10 +85,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
+import coil3.compose.SubcomposeAsyncImageContent
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.data.remote.SourceCatalogDirectory
 import org.koitharu.kotatsu.domain.model.CoverCornerStyle
@@ -1220,52 +1224,95 @@ fun SourceFaviconBadge(
     size: androidx.compose.ui.unit.Dp = 42.dp,
     modifier: Modifier = Modifier
 ) {
-    val cookieShape = MaterialShapes.Cookie9Sided.toShape()
+    // 12-sided cookie has 4-way mirror symmetry so the badge silhouette never looks rotated/tilted
+    val badgeShape = MaterialShapes.Cookie12Sided.toShape()
     val resolvedModel = remember(explicitFaviconUrl, baseUrl) {
         explicitFaviconUrl.takeIf { it.isNotBlank() }
             ?: SourceCatalogDirectory.defaultFaviconUrl(baseUrl)
     }
     val monogram = remember(name) {
-        name.trim().take(2).uppercase().ifBlank { "W" }
+        name.trim()
+            .filter { it.isLetterOrDigit() }
+            .take(2)
+            .uppercase()
+            .ifBlank { "W" }
     }
 
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .size(size)
-            .clip(cookieShape)
+            .clip(badgeShape)
             .background(MaterialTheme.colorScheme.secondaryContainer)
     ) {
         if (resolvedModel.isNotBlank()) {
             SubcomposeAsyncImage(
                 model = resolvedModel,
                 contentDescription = name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(size * 0.62f)
-                    .clip(CircleShape),
+                alignment = Alignment.Center,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
                 loading = {
-                    Text(
-                        text = monogram,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+                    SourceFallbackMonogram(monogram = monogram, badgeSize = size)
                 },
                 error = {
-                    Text(
-                        text = monogram,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+                    SourceFallbackMonogram(monogram = monogram, badgeSize = size)
+                },
+                success = {
+                    val imageScope = this
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        with(imageScope) {
+                            SubcomposeAsyncImageContent(
+                                modifier = Modifier
+                                    .size(size * 0.58f)
+                                    .clip(CircleShape)
+                            )
+                        }
+                    }
                 }
             )
         } else {
-            Text(
-                text = monogram,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
+            SourceFallbackMonogram(monogram = monogram, badgeSize = size)
         }
+    }
+}
+
+@Composable
+private fun SourceFallbackMonogram(
+    monogram: String,
+    badgeSize: androidx.compose.ui.unit.Dp
+) {
+    val isCompact = badgeSize <= 24.dp
+    val displayLabel = if (isCompact) monogram.take(1) else monogram
+    val baseStyle = if (isCompact) {
+        MaterialTheme.typography.labelSmall
+    } else {
+        MaterialTheme.typography.labelLarge
+    }
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Text(
+            text = displayLabel,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            softWrap = false,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            style = baseStyle.copy(
+                fontWeight = FontWeight.Bold,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                lineHeightStyle = LineHeightStyle(
+                    alignment = LineHeightStyle.Alignment.Center,
+                    trim = LineHeightStyle.Trim.Both
+                )
+            ),
+            modifier = Modifier.testTag("source_favicon_fallback_monogram")
+        )
     }
 }
 

@@ -444,7 +444,8 @@ private fun ManagedSourceExpressiveCard(
                     name = item.name,
                     baseUrl = item.baseUrl,
                     explicitFaviconUrl = item.faviconUrl,
-                    size = 46.dp
+                    size = 46.dp,
+                    modifier = Modifier.testTag("catalog_favicon_badge_${item.key}")
                 )
 
                 Column(modifier = Modifier.weight(1f)) {

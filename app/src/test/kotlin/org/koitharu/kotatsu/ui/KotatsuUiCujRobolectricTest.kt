@@ -275,6 +275,26 @@ class KotatsuUiCujRobolectricTest {
         }
         composeTestRule.waitForIdle()
 
+        // Verify fallback monogram for sites without loaded favicons is strictly centered inside the badge
+        composeTestRule.onNodeWithTag("sources_region_GLOBAL_AND_OPDS").performClick()
+        composeTestRule.waitForIdle()
+        val opdsBadgeNode = composeTestRule.onNodeWithTag("catalog_favicon_badge_opds_komga", useUnmergedTree = true)
+            .performScrollTo()
+            .assertIsDisplayed()
+            .fetchSemanticsNode()
+        val monogramChild = opdsBadgeNode.children.firstOrNull()
+        assertTrue("Fallback monogram child should exist inside badge", monogramChild != null)
+        val badgeCenter = opdsBadgeNode.boundsInRoot.center
+        val textCenter = monogramChild!!.boundsInRoot.center
+        assertTrue(
+            "Fallback monogram must be horizontally centered (badge=${badgeCenter.x}, text=${textCenter.x})",
+            kotlin.math.abs(badgeCenter.x - textCenter.x) <= 2.5f
+        )
+        assertTrue(
+            "Fallback monogram must be vertically centered (badge=${badgeCenter.y}, text=${textCenter.y})",
+            kotlin.math.abs(badgeCenter.y - textCenter.y) <= 2.5f
+        )
+
         // Filter by PT-BR catalog sources and enable LerMangá
         composeTestRule.onNodeWithTag("sources_region_PT_BR").performClick()
         composeTestRule.waitForIdle()

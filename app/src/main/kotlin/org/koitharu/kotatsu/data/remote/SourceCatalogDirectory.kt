@@ -41,7 +41,7 @@ object SourceCatalogDirectory {
         CatalogDirectoryEntry(
             catalogId = "builtin_kitsu",
             name = "Kitsu Global",
-            baseUrl = "https://kitsu.app",
+            baseUrl = "https://kitsu.io",
             searchUrlTemplate = "https://kitsu.io/api/edge/manga?filter[text]={query}",
             languageCode = "MULTI",
             engineLabel = "JSON:API",
@@ -243,6 +243,8 @@ object SourceCatalogDirectory {
     fun defaultFaviconUrl(baseUrl: String): String {
         val parsed = normalizeOrigin(baseUrl).toHttpUrlOrNull() ?: return ""
         val host = parsed.host.lowercase()
+        // Unconfigured template LAN IP renders centered monogram immediately without timing out
+        if (host == "192.168.1.100") return ""
         // Local LAN IPs shouldn't query external favicon services; use direct /favicon.ico
         if (host.startsWith("192.168.") || host.startsWith("10.") || host == "localhost" || host == "127.0.0.1") {
             return "${parsed.scheme}://${parsed.host}:${parsed.port}/favicon.ico"
