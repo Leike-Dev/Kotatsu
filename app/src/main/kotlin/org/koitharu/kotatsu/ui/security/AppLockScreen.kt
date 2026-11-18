@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -49,12 +48,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.ripple
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,13 +82,24 @@ fun AppLockScreen(
     val haptics = LocalHapticFeedback.current
     var enteredPin by remember { mutableStateOf("") }
     var hasError by remember { mutableStateOf(false) }
+    var biometricErrorText by remember { mutableStateOf<String?>(null) }
+    var autoPromptedOnce by rememberSaveable { mutableStateOf(false) }
 
+    val fragmentActivity = remember(context) { context.findFragmentActivity() }
     val keyguardManager = remember(context) {
         context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
     }
-    val canUseDeviceCredential = allowSystemCredential && (keyguardManager?.isDeviceSecure == true)
 
-    val credentialLauncher = rememberLauncherForActivityResult(
+    val capabilityState = remember(context, allowSystemCredential) {
+        if (!allowSystemCredential) BiometricHardwareState.UNAVAILABLE
+        else BiometricAuthHelper.inspectCapability(context)
+    }
+    val canUseDeviceCredential = allowSystemCredential && (
+        capabilityState == BiometricHardwareState.READY_BIOMETRIC ||
+            capabilityState == BiometricHardwareState.READY_CREDENTIAL_ONLY
+        )
+
+    val fallbackCredentialLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -95,10 +107,45 @@ fun AppLockScreen(
         }
     }
 
+    fun triggerSystemAuth() {
+        biometricErrorText = null
+        val title = context.getString(R.string.lock_screen_title)
+        val subtitle = context.getString(R.string.lock_biometric_prompt_subtitle)
+        if (fragmentActivity != null) {
+            BiometricAuthHelper.launchBiometricPrompt(
+                activity = fragmentActivity,
+                title = title,
+                subtitle = subtitle,
+                onSuccess = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onUnlocked()
+                },
+                onErrorMessage = { msg ->
+                    biometricErrorText = msg
+                }
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            val intent = keyguardManager?.createConfirmDeviceCredentialIntent(title, subtitle)
+            if (intent != null) {
+                fallbackCredentialLauncher.launch(intent)
+            }
+        }
+    }
+
+    // Automatically invoke native BiometricPrompt on lock screen appearance when available
+    LaunchedEffect(canUseDeviceCredential, fragmentActivity) {
+        if (canUseDeviceCredential && fragmentActivity != null && !autoPromptedOnce) {
+            autoPromptedOnce = true
+            triggerSystemAuth()
+        }
+    }
+
     fun onDigitTap(digit: String) {
         if (enteredPin.length >= 4) return
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         hasError = false
+        biometricErrorText = null
         val updated = enteredPin + digit
         enteredPin = updated
         if (updated.length == 4) {
@@ -121,17 +168,6 @@ fun AppLockScreen(
         }
     }
 
-    fun triggerSystemAuth() {
-        @Suppress("DEPRECATION")
-        val intent = keyguardManager?.createConfirmDeviceCredentialIntent(
-            context.getString(R.string.lock_screen_title),
-            context.getString(R.string.lock_screen_subtitle)
-        )
-        if (intent != null) {
-            credentialLauncher.launch(intent)
-        }
-    }
-
     val burstShape = MaterialShapes.SoftBurst.toShape()
     val cookieShape = MaterialShapes.Cookie9Sided.toShape()
 
@@ -142,7 +178,6 @@ fun AppLockScreen(
             .testTag("app_lock_screen")
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Atmospheric Expressive Polygon Accents
             Box(
                 modifier = Modifier
                     .size(260.dp)
@@ -169,7 +204,6 @@ fun AppLockScreen(
                 val isTabletWide = maxWidth >= 680.dp
 
                 if (isTabletWide) {
-                    // Canonical Two-Pane Tablet Lock Screen
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(36.dp),
@@ -185,6 +219,7 @@ fun AppLockScreen(
                             LockHeaderAndIndicators(
                                 enteredLength = enteredPin.length,
                                 hasError = hasError,
+                                biometricErrorText = biometricErrorText,
                                 canUseDeviceCredential = canUseDeviceCredential,
                                 onTriggerSystemAuth = ::triggerSystemAuth
                             )
@@ -205,7 +240,6 @@ fun AppLockScreen(
                         }
                     }
                 } else {
-                    // Compact Portrait Expressive Lock Screen
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.SpaceEvenly,
@@ -214,6 +248,7 @@ fun AppLockScreen(
                         LockHeaderAndIndicators(
                             enteredLength = enteredPin.length,
                             hasError = hasError,
+                            biometricErrorText = biometricErrorText,
                             canUseDeviceCredential = canUseDeviceCredential,
                             onTriggerSystemAuth = ::triggerSystemAuth
                         )
@@ -235,6 +270,7 @@ fun AppLockScreen(
 private fun LockHeaderAndIndicators(
     enteredLength: Int,
     hasError: Boolean,
+    biometricErrorText: String?,
     canUseDeviceCredential: Boolean,
     onTriggerSystemAuth: () -> Unit
 ) {
@@ -293,7 +329,6 @@ private fun LockHeaderAndIndicators(
 
         Spacer(modifier = Modifier.height(26.dp))
 
-        // Morphing PIN Dots with tactile error shake
         val shakeOffsetX = remember { Animatable(0f) }
         LaunchedEffect(hasError) {
             if (hasError) {
@@ -338,11 +373,16 @@ private fun LockHeaderAndIndicators(
             }
         }
 
-        AnimatedVisibility(visible = hasError) {
+        AnimatedVisibility(visible = hasError || !biometricErrorText.isNullOrBlank()) {
             Text(
-                text = stringResource(R.string.lock_screen_wrong_pin),
+                text = if (hasError) {
+                    stringResource(R.string.lock_screen_wrong_pin)
+                } else {
+                    biometricErrorText.orEmpty()
+                },
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 12.dp)
             )
         }
@@ -493,7 +533,7 @@ private fun MorphingKeypadButton(
             )
             .clickable(
                 interactionSource = interactionSource,
-                indication = androidx.compose.material3.ripple(),
+                indication = ripple(),
                 onClick = onClick
             )
             .testTag(testTagName)

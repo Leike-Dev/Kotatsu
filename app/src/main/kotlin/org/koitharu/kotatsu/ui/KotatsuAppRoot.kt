@@ -61,6 +61,7 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,7 +84,9 @@ import kotlinx.coroutines.launch
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.data.repository.MangaRepository
 import org.koitharu.kotatsu.domain.model.AppPreferences
+import org.koitharu.kotatsu.domain.model.DefaultStartTab
 import org.koitharu.kotatsu.domain.model.MangaSourceType
+import org.koitharu.kotatsu.domain.model.NavLabelBehavior
 import org.koitharu.kotatsu.ui.bookmarks.BookmarksScreen
 import org.koitharu.kotatsu.ui.bookmarks.BookmarksViewModel
 import org.koitharu.kotatsu.ui.browser.SourceBrowserScreen
@@ -103,13 +106,25 @@ import org.koitharu.kotatsu.ui.navigation.MangaDetailsRoute
 import org.koitharu.kotatsu.ui.navigation.ReaderRoute
 import org.koitharu.kotatsu.ui.navigation.SettingsRoute
 import org.koitharu.kotatsu.ui.navigation.SourceBrowserRoute
+import org.koitharu.kotatsu.ui.navigation.SourcesCatalogRoute
 import org.koitharu.kotatsu.ui.navigation.StatisticsRoute
 import org.koitharu.kotatsu.ui.reader.ReaderScreen
 import org.koitharu.kotatsu.ui.reader.ReaderViewModel
 import org.koitharu.kotatsu.ui.settings.SettingsScreen
 import org.koitharu.kotatsu.ui.settings.SettingsViewModel
+import org.koitharu.kotatsu.ui.sources.SourcesCatalogScreen
+import org.koitharu.kotatsu.ui.sources.SourcesCatalogViewModel
 import org.koitharu.kotatsu.ui.stats.StatisticsScreen
 import org.koitharu.kotatsu.ui.stats.StatisticsViewModel
+
+data class WidgetLaunchRequest(
+    val targetTab: DefaultStartTab? = null,
+    val mangaId: String? = null,
+    val sourceTypeName: String? = null,
+    val chapterId: String? = null,
+    val pageIndex: Int = 0,
+    val createdAtMillis: Long = System.currentTimeMillis()
+)
 
 private data class TopLevelNavTab<T : Any>(
     val route: T,
@@ -119,10 +134,19 @@ private data class TopLevelNavTab<T : Any>(
     val testTag: String
 )
 
+private fun resolveStartRoute(tab: DefaultStartTab): Any = when (tab) {
+    DefaultStartTab.EXPLORE -> ExploreRoute()
+    DefaultStartTab.FAVORITES -> FavoritesRoute
+    DefaultStartTab.HISTORY -> HistoryRoute
+    DefaultStartTab.BOOKMARKS -> BookmarksRoute
+}
+
 @Composable
 fun KotatsuAppRoot(
     repository: MangaRepository,
     widthSizeClass: WindowWidthSizeClass,
+    widgetLaunchRequest: WidgetLaunchRequest? = null,
+    onConsumeWidgetLaunch: () -> Unit = {},
     onTriggerLockNow: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -133,6 +157,10 @@ fun KotatsuAppRoot(
 
     val prefs by repository.preferencesRepository.preferencesFlow
         .collectAsStateWithLifecycle(initialValue = AppPreferences())
+
+    val initialStartDestination = remember {
+        resolveStartRoute(prefs.defaultStartTab)
+    }
 
     val mobileTabs = listOf(
         TopLevelNavTab(
@@ -195,6 +223,28 @@ fun KotatsuAppRoot(
         }
     }
 
+    LaunchedEffect(widgetLaunchRequest) {
+        val req = widgetLaunchRequest ?: return@LaunchedEffect
+        if (!req.mangaId.isNullOrBlank() &&
+            !req.sourceTypeName.isNullOrBlank() &&
+            !req.chapterId.isNullOrBlank()
+        ) {
+            navController.navigate(
+                ReaderRoute(
+                    mangaId = req.mangaId,
+                    sourceTypeName = req.sourceTypeName,
+                    chapterId = req.chapterId,
+                    initialPage = req.pageIndex
+                )
+            ) {
+                launchSingleTop = true
+            }
+        } else if (req.targetTab != null) {
+            navigateToTab(resolveStartRoute(req.targetTab))
+        }
+        onConsumeWidgetLaunch()
+    }
+
     Surface(
         color = MaterialTheme.colorScheme.background,
         modifier = modifier.fillMaxSize()
@@ -230,16 +280,26 @@ fun KotatsuAppRoot(
                     Spacer(modifier = Modifier.weight(1f))
                     railTabs.forEach { tab ->
                         val selected = currentDestination?.hasRoute(tab.route::class) == true
+                        val showLabel = when (prefs.navLabelBehavior) {
+                            NavLabelBehavior.ALWAYS -> true
+                            NavLabelBehavior.SELECTED_ONLY -> selected
+                            NavLabelBehavior.HIDDEN -> false
+                        }
                         NavigationRailItem(
                             selected = selected,
                             onClick = { navigateToTab(tab.route) },
+                            alwaysShowLabel = prefs.navLabelBehavior == NavLabelBehavior.ALWAYS,
                             icon = {
                                 Icon(
                                     imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
                                     contentDescription = stringResource(tab.labelRes)
                                 )
                             },
-                            label = { Text(stringResource(tab.labelRes), maxLines = 1) },
+                            label = if (showLabel) {
+                                { Text(stringResource(tab.labelRes), maxLines = 1) }
+                            } else {
+                                null
+                            },
                             modifier = Modifier.testTag(tab.testTag)
                         )
                     }
@@ -259,6 +319,7 @@ fun KotatsuAppRoot(
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         KotatsuNavHost(
                             navController = navController,
+                            startDestination = initialStartDestination,
                             repository = repository,
                             useNavigationRail = true,
                             bottomDockClearance = 24.dp,
@@ -293,6 +354,7 @@ fun KotatsuAppRoot(
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         KotatsuNavHost(
                             navController = navController,
+                            startDestination = initialStartDestination,
                             repository = repository,
                             useNavigationRail = false,
                             bottomDockClearance = if (isMobileDockDestination) 96.dp else 0.dp,
@@ -311,7 +373,7 @@ fun KotatsuAppRoot(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
                 ) {
                     HorizontalFloatingToolbar(
                         expanded = true,
@@ -320,11 +382,16 @@ fun KotatsuAppRoot(
                         )
                     ) {
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             mobileTabs.forEach { tab ->
                                 val selected = currentDestination?.hasRoute(tab.route::class) == true
+                                val showTabText = when (prefs.navLabelBehavior) {
+                                    NavLabelBehavior.SELECTED_ONLY -> selected
+                                    NavLabelBehavior.ALWAYS -> true
+                                    NavLabelBehavior.HIDDEN -> false
+                                }
                                 ToggleButton(
                                     checked = selected,
                                     onCheckedChange = { navigateToTab(tab.route) },
@@ -336,7 +403,11 @@ fun KotatsuAppRoot(
                                         checkedContentColor = MaterialTheme.colorScheme.onPrimary
                                     ),
                                     contentPadding = PaddingValues(
-                                        horizontal = if (selected) 14.dp else 12.dp,
+                                        horizontal = when {
+                                            prefs.navLabelBehavior == NavLabelBehavior.ALWAYS -> 10.dp
+                                            showTabText -> 14.dp
+                                            else -> 12.dp
+                                        },
                                         vertical = 10.dp
                                     ),
                                     modifier = Modifier
@@ -349,11 +420,15 @@ fun KotatsuAppRoot(
                                         contentDescription = stringResource(tab.labelRes),
                                         modifier = Modifier.size(20.dp)
                                     )
-                                    if (selected) {
-                                        Spacer(modifier = Modifier.width(6.dp))
+                                    if (showTabText) {
+                                        Spacer(modifier = Modifier.width(5.dp))
                                         Text(
                                             text = stringResource(tab.labelRes),
-                                            style = MaterialTheme.typography.labelLarge,
+                                            style = if (prefs.navLabelBehavior == NavLabelBehavior.ALWAYS) {
+                                                MaterialTheme.typography.labelMedium
+                                            } else {
+                                                MaterialTheme.typography.labelLarge
+                                            },
                                             maxLines = 1,
                                             softWrap = false
                                         )
@@ -413,6 +488,7 @@ private fun IncognitoStatusBanner(onDisable: () -> Unit) {
 @Composable
 private fun KotatsuNavHost(
     navController: androidx.navigation.NavHostController,
+    startDestination: Any,
     repository: MangaRepository,
     useNavigationRail: Boolean,
     bottomDockClearance: Dp,
@@ -425,7 +501,7 @@ private fun KotatsuNavHost(
 
     NavHost(
         navController = navController,
-        startDestination = ExploreRoute(),
+        startDestination = startDestination,
         enterTransition = {
             fadeIn(animationSpec = tween(210)) + scaleIn(initialScale = 0.965f, animationSpec = tween(210))
         },
@@ -454,6 +530,9 @@ private fun KotatsuNavHost(
                 viewModel = vm,
                 bottomClearance = bottomDockClearance,
                 onOpenSettings = openSettingsOrNull,
+                onOpenSourcesCatalog = {
+                    navController.navigate(SourcesCatalogRoute)
+                },
                 onOpenBrowser = { url, title ->
                     navController.navigate(SourceBrowserRoute(initialUrl = url, title = title))
                 },
@@ -553,9 +632,33 @@ private fun KotatsuNavHost(
                 onOpenBrowser = { url, title ->
                     navController.navigate(SourceBrowserRoute(initialUrl = url, title = title))
                 },
+                onOpenSourcesCatalog = {
+                    navController.navigate(SourcesCatalogRoute)
+                },
+                onOpenManga = { manga ->
+                    navController.navigate(
+                        MangaDetailsRoute(
+                            mangaId = manga.id,
+                            sourceTypeName = manga.sourceType.name
+                        )
+                    )
+                },
                 onTriggerLockNow = onTriggerLockNow,
                 bottomClearance = 24.dp,
                 modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composable<SourcesCatalogRoute> {
+            val vm: SourcesCatalogViewModel = viewModel(
+                factory = SourcesCatalogViewModel.factory(repository)
+            )
+            SourcesCatalogScreen(
+                viewModel = vm,
+                onBack = { navController.popBackStack() },
+                onOpenBrowser = { url, title ->
+                    navController.navigate(SourceBrowserRoute(initialUrl = url, title = title))
+                }
             )
         }
 

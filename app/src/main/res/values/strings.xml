@@ -10,7 +10,7 @@
     <string name="nav_settings">Ajustes</string>
 
     <string name="explore_title">Descobrir</string>
-    <string name="explore_subtitle">Catálogo multissite, fontes externas e arquivos CBZ</string>
+    <string name="explore_subtitle">Catálogo multissite e diretório de fontes</string>
     <string name="favorites_title">Favoritos</string>
     <string name="history_title">Histórico</string>
     <string name="bookmarks_title">Marcadores</string>
@@ -366,4 +366,99 @@
     <string name="stats_chapters_ratio_format">%1$d de %2$d capítulos lidos</string>
     <string name="stats_empty_title">Ainda não há estatísticas suficientes</string>
     <string name="stats_empty_sub">Adicione mangás aos favoritos ou leia alguns capítulos para visualizar seus gráficos de atividade, gêneros e conclusão.</string>
+
+    <!-- Grupos Organizados de Configurações e Novas Opções de Aparência -->
+    <string name="settings_group_theme_palette">Tema e paleta de cores</string>
+    <string name="settings_group_cards_covers">Cartões, capas e indicadores</string>
+    <string name="settings_group_navigation">Navegação e tela inicial</string>
+    <string name="settings_group_widgets">Widgets Material 3 Expressive</string>
+    <string name="settings_group_reading_mode">Modo de leitura, escala e fundo</string>
+    <string name="settings_group_visual_filters">Conforto visual e filtros de imagem</string>
+    <string name="settings_group_reader_controls">Controles, gestos e desempenho</string>
+    <string name="settings_group_explore_display">Exibição do catálogo e capítulos</string>
+    <string name="settings_group_explore_sections">Seções visíveis e conteúdo</string>
+    <string name="settings_group_ad_protection">Escudo anti-propaganda e anti-adblock</string>
+    <string name="settings_group_dns_browser">DNS sobre HTTPS e navegador</string>
+    <string name="settings_group_app_lock">Bloqueio por PIN e biometria</string>
+    <string name="settings_group_privacy">Privacidade e histórico</string>
+    <string name="settings_group_local_cbz">Biblioteca local (arquivos CBZ e ZIP)</string>
+    <string name="settings_group_backup_files">Backup, exportação e restauração</string>
+    <string name="settings_group_cache">Armazenamento e limpeza de cache</string>
+
+    <string name="color_palette_label">Paleta de cores Expressive</string>
+    <string name="color_palette_dynamic_hint">Desative “Cores dinâmicas (Material You)” acima para escolher manualmente uma paleta temática do Kotatsu.</string>
+    <string name="palette_vermilion">Vermelhão Kotatsu</string>
+    <string name="palette_sakura">Sakura Carmesim</string>
+    <string name="palette_ocean">Oceano Safira</string>
+    <string name="palette_emerald">Jade Esmeralda</string>
+    <string name="palette_amethyst">Ametista Real</string>
+    <string name="palette_solar">Âmbar Solar</string>
+
+    <string name="cover_corner_style_label">Formato dos cantos das capas</string>
+    <string name="cover_corner_expressive">Expressivo (curvo)</string>
+    <string name="cover_corner_soft">Suave</string>
+    <string name="cover_corner_sharp">Reto editorial</string>
+    <string name="toggle_unread_badges_label">Selos de capítulos novos nas capas</string>
+    <string name="toggle_unread_badges_sub">Destaca selos como “+3 NOVO” no topo das capas da estante</string>
+    <string name="toggle_progress_covers_label">Barra de progresso nas capas</string>
+    <string name="toggle_progress_covers_sub">Mostra a faixa inferior de andamento de leitura sobre as capas</string>
+
+    <string name="nav_labels_behavior_label">Rótulos na barra de navegação</string>
+    <string name="nav_labels_selected">Apenas aba ativa</string>
+    <string name="nav_labels_always">Sempre visíveis</string>
+    <string name="nav_labels_hidden">Somente ícones</string>
+    <string name="default_start_tab_label">Aba inicial ao abrir o Kotatsu</string>
+
+    <!-- Biometria e Status do Hardware -->
+    <string name="lock_biometric_prompt_subtitle">Confirme sua identidade para desbloquear sua biblioteca</string>
+    <string name="biometric_status_ready">Sensor biométrico pronto (impressão digital / rosto ativo)</string>
+    <string name="biometric_status_credential_only">Credencial do Android disponível (PIN ou padrão do aparelho)</string>
+    <string name="biometric_status_none_enrolled">Nenhuma biometria cadastrada nas configurações do Android</string>
+    <string name="biometric_status_unavailable">Hardware biométrico indisponível neste dispositivo — use o PIN de 4 dígitos</string>
+
+    <!-- Catálogo de Fontes, Testador de Sites e Favicons -->
+    <string name="open_sources_catalog_button">Catálogo de sites</string>
+    <string name="manage_sources_catalog_title">Catálogo de Fontes e Testador de Sites</string>
+    <string name="manage_sources_catalog_sub">Explore mais de 20 catálogos em PT-BR, Inglês, Espanhol e OPDS, capture favicons automaticamente e teste latência ou proteção Cloudflare.</string>
+    <string name="manage_sources_catalog_button">Gerenciar catálogo e testar sites</string>
+    <string name="sources_catalog_screen_title">Catálogo de Fontes</string>
+    <string name="sources_catalog_screen_sub_format">%1$d fontes ativas de %2$d disponíveis no diretório</string>
+    <string name="sources_test_all_active">Testar todas as ativas</string>
+    <string name="sources_testing_batch_progress">Testando conectividade e favicons (%1$d de %2$d)…</string>
+    <string name="sources_search_placeholder">Filtrar por nome do site, idioma, motor ou domínio…</string>
+    <string name="sources_filter_all">Todas</string>
+    <string name="sources_filter_active">Ativas</string>
+    <string name="sources_filter_global_opds">Global / OPDS</string>
+    <string name="sources_empty_search_title">Nenhuma fonte encontrada</string>
+    <string name="sources_empty_search_sub">Limpe o filtro ou adicione manualmente o endereço URL do site desejado.</string>
+    <string name="source_test_and_favicon_action">Testar e ícone</string>
+    <string name="source_open_short">Abrir</string>
+    <string name="source_testing_now">Testando…</string>
+
+    <!-- Biblioteca Local CBZ nas Configurações -->
+    <string name="settings_local_cbz_sub">Importe quadrinhos e mangás compactados (.cbz ou .zip) armazenados no aparelho para leitura offline.</string>
+    <string name="settings_import_cbz_action">Importar arquivo CBZ / ZIP</string>
+    <string name="settings_local_cbz_empty">Nenhum arquivo CBZ ou ZIP importado ainda.</string>
+    <string name="settings_open_manga_action">Abrir</string>
+
+    <!-- Widgets Material Design 3 Expressive -->
+    <string name="settings_widgets_sub">Adicione widgets com cantos expressivos, cores dinâmicas e retomada instantânea na tela inicial do Android.</string>
+    <string name="pin_continue_widget_action">Fixar “Continuar Leitura”</string>
+    <string name="pin_shelf_widget_action">Fixar “Estante Expressiva”</string>
+    <string name="sync_widgets_now_action">Sincronizar widgets</string>
+    <string name="widget_pin_requested_msg">Confirme na janela do sistema para fixar o widget na tela inicial.</string>
+    <string name="widget_pin_manual_msg">Mantenha pressionada a tela inicial do Android e escolha Widgets → Kotatsu.</string>
+    <string name="widget_continue_label">Kotatsu • Continuar Leitura</string>
+    <string name="widget_continue_desc">Retome rapidamente o último capítulo em leitura com progresso visual Material 3 Expressive.</string>
+    <string name="widget_continue_badge">CONTINUAR LEITURA</string>
+    <string name="widget_continue_empty_title">Pronto para começar uma nova leitura</string>
+    <string name="widget_continue_empty_sub">Toque para explorar o catálogo de mangás e manhwas no Kotatsu</string>
+    <string name="widget_continue_cta_explore">Explorar catálogo</string>
+    <string name="widget_continue_cta_read">Continuar agora</string>
+    <string name="widget_shelf_label">Kotatsu • Estante Expressiva</string>
+    <string name="widget_shelf_desc">Resumo expressivo da sua estante de favoritos, capítulos lidos e alertas de novidades.</string>
+    <string name="widget_shelf_header">Estante Kotatsu</string>
+    <string name="widget_shelf_up_to_date">Em dia</string>
+    <string name="widget_shelf_empty_hint">Adicione suas obras preferidas aos Favoritos para acompanhar aqui.</string>
+    <string name="widget_shelf_open_favorites">Abrir estante</string>
 </resources>

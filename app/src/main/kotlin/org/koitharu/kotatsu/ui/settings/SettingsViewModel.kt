@@ -1,5 +1,6 @@
 package org.koitharu.kotatsu.ui.settings
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -9,19 +10,28 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koitharu.kotatsu.data.repository.MangaRepository
+import org.koitharu.kotatsu.domain.model.AppColorPalette
 import org.koitharu.kotatsu.domain.model.AppPreferences
 import org.koitharu.kotatsu.domain.model.AppThemeMode
 import org.koitharu.kotatsu.domain.model.ChapterDisplayMode
+import org.koitharu.kotatsu.domain.model.CoverCornerStyle
 import org.koitharu.kotatsu.domain.model.CustomMangaSource
+import org.koitharu.kotatsu.domain.model.DefaultStartTab
 import org.koitharu.kotatsu.domain.model.DohProvider
 import org.koitharu.kotatsu.domain.model.ExploreLayoutMode
 import org.koitharu.kotatsu.domain.model.LanguageFilter
 import org.koitharu.kotatsu.domain.model.LibraryStats
+import org.koitharu.kotatsu.domain.model.MangaItem
+import org.koitharu.kotatsu.domain.model.NavLabelBehavior
 import org.koitharu.kotatsu.domain.model.ReaderBackground
 import org.koitharu.kotatsu.domain.model.ReaderMode
 import org.koitharu.kotatsu.domain.model.ReaderScaleMode
+import org.koitharu.kotatsu.domain.model.SourceHealthCheckResult
+import org.koitharu.kotatsu.domain.model.SourceHealthState
+import org.koitharu.kotatsu.widget.KotatsuWidgetManager
 
 enum class SettingsCategory {
     APPEARANCE,
@@ -45,6 +55,9 @@ class SettingsViewModel(
     val customSources: StateFlow<List<CustomMangaSource>> = repository.customSourcesFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val localMangas: StateFlow<List<MangaItem>> = repository.localMangasFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     val libraryStats: StateFlow<LibraryStats> = repository.libraryStatsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryStats())
 
@@ -53,6 +66,12 @@ class SettingsViewModel(
 
     private val _cacheSizeBytes = MutableStateFlow(0L)
     val cacheSizeBytes: StateFlow<Long> = _cacheSizeBytes.asStateFlow()
+
+    private val _isImportingCbz = MutableStateFlow(false)
+    val isImportingCbz: StateFlow<Boolean> = _isImportingCbz.asStateFlow()
+
+    private val _sourceTestResults = MutableStateFlow<Map<Long, SourceHealthCheckResult>>(emptyMap())
+    val sourceTestResults: StateFlow<Map<Long, SourceHealthCheckResult>> = _sourceTestResults.asStateFlow()
 
     private val _snackbarMessage = MutableStateFlow<String?>(null)
     val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
@@ -71,15 +90,32 @@ class SettingsViewModel(
         _selectedCategory.value = category
     }
 
+    fun postSnackbarMessage(message: String) {
+        _snackbarMessage.value = message
+    }
+
     fun consumeSnackbar() {
         _snackbarMessage.value = null
     }
 
-    // Appearance
+    // Appearance, Palettes, Covers & Navigation
     fun setThemeMode(mode: AppThemeMode) = viewModelScope.launch { prefsRepo.setThemeMode(mode) }
     fun setAmoledDark(enabled: Boolean) = viewModelScope.launch { prefsRepo.setAmoledDark(enabled) }
     fun setDynamicColors(enabled: Boolean) = viewModelScope.launch { prefsRepo.setDynamicColors(enabled) }
+    fun setColorPalette(palette: AppColorPalette) = viewModelScope.launch { prefsRepo.setColorPalette(palette) }
+    fun setCoverCornerStyle(style: CoverCornerStyle) = viewModelScope.launch { prefsRepo.setCoverCornerStyle(style) }
+    fun setNavLabelBehavior(behavior: NavLabelBehavior) = viewModelScope.launch { prefsRepo.setNavLabelBehavior(behavior) }
+    fun setDefaultStartTab(tab: DefaultStartTab) = viewModelScope.launch { prefsRepo.setDefaultStartTab(tab) }
     fun setShowSourceBadges(enabled: Boolean) = viewModelScope.launch { prefsRepo.setShowSourceBadges(enabled) }
+    fun setShowUnreadBadgesOnCovers(enabled: Boolean) = viewModelScope.launch { prefsRepo.setShowUnreadBadgesOnCovers(enabled) }
+    fun setShowProgressOnCovers(enabled: Boolean) = viewModelScope.launch { prefsRepo.setShowProgressOnCovers(enabled) }
+
+    fun syncWidgetsNow(context: Context) {
+        viewModelScope.launch {
+            runCatching { KotatsuWidgetManager.refreshAllWidgetsNow(context) }
+            _snackbarMessage.value = "Widgets sincronizados com sua biblioteca!"
+        }
+    }
 
     // Reader
     fun setDefaultReaderMode(mode: ReaderMode) = viewModelScope.launch { prefsRepo.setDefaultReaderMode(mode) }
@@ -107,7 +143,7 @@ class SettingsViewModel(
     fun setPreferredLanguage(lang: LanguageFilter) = viewModelScope.launch { prefsRepo.setPreferredLanguage(lang) }
     fun setChapterDisplayMode(mode: ChapterDisplayMode) = viewModelScope.launch { prefsRepo.setChapterDisplayMode(mode) }
 
-    // Custom Sources
+    // Custom Sources & Connectivity Testing
     fun addCustomSource(name: String, url: String, template: String) {
         viewModelScope.launch {
             repository.addCustomSource(name, url, template)
@@ -132,6 +168,22 @@ class SettingsViewModel(
         viewModelScope.launch {
             repository.deleteCustomSource(id)
             _snackbarMessage.value = "Fonte removida."
+        }
+    }
+
+    fun testCustomSource(source: CustomMangaSource) {
+        viewModelScope.launch {
+            _sourceTestResults.update {
+                it + (source.id to SourceHealthCheckResult(state = SourceHealthState.TESTING))
+            }
+            val result = repository.testSourceConnection(
+                sourceId = source.id,
+                name = source.name,
+                baseUrl = source.baseUrl
+            )
+            _sourceTestResults.update { it + (source.id to result) }
+            val summary = result.message.ifBlank { "HTTP ${result.httpCode} • ${result.latencyMs} ms" }
+            _snackbarMessage.value = "${source.name}: $summary"
         }
     }
 
@@ -161,6 +213,30 @@ class SettingsViewModel(
 
     fun setIncognitoMode(enabled: Boolean) = viewModelScope.launch {
         prefsRepo.setIncognitoMode(enabled)
+    }
+
+    // Local CBZ Import & Management (Moved from Explore to Settings)
+    fun importCbzFile(uri: Uri, onImported: ((MangaItem) -> Unit)? = null) {
+        viewModelScope.launch {
+            _isImportingCbz.value = true
+            runCatching { repository.importLocalCbz(uri) }
+                .onSuccess { imported ->
+                    _isImportingCbz.value = false
+                    _snackbarMessage.value = "Arquivo \"${imported.title}\" importado com sucesso!"
+                    onImported?.invoke(imported)
+                }
+                .onFailure { err ->
+                    _isImportingCbz.value = false
+                    _snackbarMessage.value = err.localizedMessage ?: "Falha ao importar arquivo CBZ/ZIP."
+                }
+        }
+    }
+
+    fun deleteLocalManga(manga: MangaItem) {
+        viewModelScope.launch {
+            repository.deleteLocalManga(manga)
+            _snackbarMessage.value = "\"${manga.title}\" removido da biblioteca local."
+        }
     }
 
     // Backup & Maintenance

@@ -149,6 +149,9 @@ data class CustomSourceEntity(
     val baseUrl: String,
     val searchUrlTemplate: String = "",
     val enabled: Boolean = true,
+    @ColumnInfo(defaultValue = "") val faviconUrl: String = "",
+    @ColumnInfo(defaultValue = "ALL") val languageCode: String = "ALL",
+    @ColumnInfo(defaultValue = "WEB") val catalogType: String = "WEB",
     val createdAt: Long = System.currentTimeMillis()
 ) {
     fun toDomain(): CustomMangaSource = CustomMangaSource(
@@ -156,7 +159,10 @@ data class CustomSourceEntity(
         name = name,
         baseUrl = baseUrl,
         searchUrlTemplate = searchUrlTemplate,
-        enabled = enabled
+        enabled = enabled,
+        faviconUrl = faviconUrl,
+        languageCode = languageCode,
+        catalogType = catalogType
     )
 
     companion object {
@@ -165,7 +171,10 @@ data class CustomSourceEntity(
             name = source.name,
             baseUrl = source.baseUrl,
             searchUrlTemplate = source.searchUrlTemplate,
-            enabled = source.enabled
+            enabled = source.enabled,
+            faviconUrl = source.faviconUrl,
+            languageCode = source.languageCode,
+            catalogType = source.catalogType
         )
     }
 }

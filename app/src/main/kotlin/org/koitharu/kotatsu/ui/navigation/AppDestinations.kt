@@ -24,6 +24,9 @@ object SettingsRoute
 object StatisticsRoute
 
 @Serializable
+object SourcesCatalogRoute
+
+@Serializable
 data class MangaDetailsRoute(
     val mangaId: String,
     val sourceTypeName: String

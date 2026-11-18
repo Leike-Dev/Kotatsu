@@ -264,6 +264,53 @@ class BackupAndScraperTest {
         assertTrue(stealthJs.contains("window.FuckAdBlock"))
     }
 
+    @Test
+    fun `new appearance palettes, cover styles, navigation behavior, and SourceCatalogDirectory favicons persist and extract cleanly`() = runBlocking {
+        // 1. Verify built-in catalog has 20+ multilingual & PT-BR sources with valid favicons
+        val entries = org.koitharu.kotatsu.data.remote.SourceCatalogDirectory.entries
+        assertTrue(entries.size >= 20)
+        assertTrue(entries.any { it.languageCode == "PT-BR" && it.defaultFaviconUrl.startsWith("https://") })
+        assertTrue(entries.any { it.languageCode == "OPDS" })
+
+        // 2. Verify HTML <link rel="icon"> discovery resolves relative and absolute URLs
+        val htmlDoc = org.jsoup.Jsoup.parse(
+            """
+            <html>
+              <head>
+                <link rel="apple-touch-icon" href="/assets/icons/touch-180.png" />
+              </head>
+              <body></body>
+            </html>
+            """.trimIndent(),
+            "https://portalscan.example.com.br/catalogo"
+        )
+        val extractedIcon = org.koitharu.kotatsu.data.remote.SourceCatalogDirectory.extractFaviconFromDocument(
+            doc = htmlDoc,
+            pageUrl = "https://portalscan.example.com.br/catalogo"
+        )
+        assertEquals("https://portalscan.example.com.br/assets/icons/touch-180.png", extractedIcon)
+
+        // 3. Verify new Appearance & Navigation preferences round-trip through Backup export & restore
+        sourceEnv.preferencesRepository.setColorPalette(org.koitharu.kotatsu.domain.model.AppColorPalette.SAKURA_CRIMSON)
+        sourceEnv.preferencesRepository.setCoverCornerStyle(org.koitharu.kotatsu.domain.model.CoverCornerStyle.SHARP)
+        sourceEnv.preferencesRepository.setNavLabelBehavior(org.koitharu.kotatsu.domain.model.NavLabelBehavior.ALWAYS)
+        sourceEnv.preferencesRepository.setDefaultStartTab(org.koitharu.kotatsu.domain.model.DefaultStartTab.FAVORITES)
+        sourceEnv.preferencesRepository.setShowUnreadBadgesOnCovers(false)
+        sourceEnv.preferencesRepository.setShowProgressOnCovers(false)
+
+        val backupFile = File(sourceEnv.tempDir, "kotatsu_appearance_prefs.json")
+        sourceEnv.repository.exportBackup(Uri.fromFile(backupFile))
+        targetEnv.repository.restoreBackup(Uri.fromFile(backupFile))
+
+        val restored = targetEnv.preferencesRepository.preferencesFlow.first()
+        assertEquals(org.koitharu.kotatsu.domain.model.AppColorPalette.SAKURA_CRIMSON, restored.colorPalette)
+        assertEquals(org.koitharu.kotatsu.domain.model.CoverCornerStyle.SHARP, restored.coverCornerStyle)
+        assertEquals(org.koitharu.kotatsu.domain.model.NavLabelBehavior.ALWAYS, restored.navLabelBehavior)
+        assertEquals(org.koitharu.kotatsu.domain.model.DefaultStartTab.FAVORITES, restored.defaultStartTab)
+        assertFalse(restored.showUnreadBadgesOnCovers)
+        assertFalse(restored.showProgressOnCovers)
+    }
+
     private fun ZipOutputStream.putJsonEntry(name: String, jsonBody: String) {
         putNextEntry(ZipEntry(name))
         write(jsonBody.toByteArray(Charsets.UTF_8))

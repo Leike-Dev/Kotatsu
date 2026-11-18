@@ -25,6 +25,7 @@ import org.koitharu.kotatsu.data.local.prefs.UserPreferencesRepository
 import org.koitharu.kotatsu.data.remote.CustomSiteParser
 import org.koitharu.kotatsu.data.remote.KitsuApi
 import org.koitharu.kotatsu.data.remote.MangaDexApi
+import org.koitharu.kotatsu.data.remote.SourceCatalogDirectory
 import org.koitharu.kotatsu.domain.model.CatalogSort
 import org.koitharu.kotatsu.domain.model.ChapterItem
 import org.koitharu.kotatsu.domain.model.CustomMangaSource
@@ -42,7 +43,9 @@ import org.koitharu.kotatsu.domain.model.PageBookmarkItem
 import org.koitharu.kotatsu.domain.model.PageItem
 import org.koitharu.kotatsu.domain.model.ReadingAnalytics
 import org.koitharu.kotatsu.domain.model.ReadingHistoryItem
+import org.koitharu.kotatsu.domain.model.SourceHealthCheckResult
 import org.koitharu.kotatsu.domain.model.SourceStatItem
+import org.koitharu.kotatsu.widget.KotatsuWidgetManager
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -177,6 +180,7 @@ class MangaRepository(
                 dao.upsertMangas(recovered.map(MangaEntity::fromDomain))
             }
         }
+        KotatsuWidgetManager.refreshAllWidgetsAsync(appContext)
     }
 
     fun observeFavoritesByCategory(categoryId: Long?): Flow<List<MangaItem>> {
@@ -306,23 +310,39 @@ class MangaRepository(
 
     suspend fun getPopularTags(): List<MangaTag> = api.getPopularTags()
 
-    // Custom Sources CRUD
+    // Custom Sources CRUD & Catalog Health / Favicon Discovery
     suspend fun addCustomSource(
         name: String,
         baseUrl: String,
-        searchTemplate: String
+        searchTemplate: String,
+        faviconUrl: String = "",
+        languageCode: String = "ALL",
+        catalogType: String = "WEB"
     ): Long {
         val cleanName = name.trim()
         val normalizedUrl = baseUrl.trim().let {
             if (!it.startsWith("http://") && !it.startsWith("https://")) "https://$it" else it
         }.trimEnd('/')
         if (cleanName.isBlank() || normalizedUrl.isBlank()) return -1L
+        val existing = dao.getAllCustomSourcesList().firstOrNull {
+            it.baseUrl.trimEnd('/').equals(normalizedUrl, ignoreCase = true)
+        }
+        if (existing != null) {
+            dao.setCustomSourceEnabled(existing.id, true)
+            return existing.id
+        }
+        val resolvedFavicon = faviconUrl.trim().ifBlank {
+            SourceCatalogDirectory.defaultFaviconUrl(normalizedUrl)
+        }
         return dao.insertCustomSource(
             CustomSourceEntity(
                 name = cleanName,
                 baseUrl = normalizedUrl,
                 searchUrlTemplate = searchTemplate.trim(),
-                enabled = true
+                enabled = true,
+                faviconUrl = resolvedFavicon,
+                languageCode = languageCode,
+                catalogType = catalogType
             )
         )
     }
@@ -331,18 +351,23 @@ class MangaRepository(
         sourceId: Long,
         name: String,
         baseUrl: String,
-        searchTemplate: String
+        searchTemplate: String,
+        faviconUrl: String = ""
     ) {
         val cleanName = name.trim()
         val normalizedUrl = baseUrl.trim().let {
             if (!it.startsWith("http://") && !it.startsWith("https://")) "https://$it" else it
         }.trimEnd('/')
         if (cleanName.isBlank() || normalizedUrl.isBlank()) return
+        val resolvedFavicon = faviconUrl.trim().ifBlank {
+            SourceCatalogDirectory.defaultFaviconUrl(normalizedUrl)
+        }
         dao.updateCustomSource(
             sourceId = sourceId,
             name = cleanName,
             baseUrl = normalizedUrl,
-            searchTemplate = searchTemplate.trim()
+            searchTemplate = searchTemplate.trim(),
+            faviconUrl = resolvedFavicon
         )
     }
 
@@ -352,6 +377,25 @@ class MangaRepository(
 
     suspend fun deleteCustomSource(sourceId: Long) {
         dao.deleteCustomSource(sourceId)
+    }
+
+    suspend fun testSourceConnection(
+        sourceId: Long? = null,
+        name: String,
+        baseUrl: String,
+        probeUrlOverride: String? = null
+    ): SourceHealthCheckResult {
+        val result = customSiteParser.probeSiteHealthAndFavicon(
+            baseUrl = baseUrl,
+            sourceName = name,
+            probeUrlOverride = probeUrlOverride
+        )
+        if (sourceId != null && sourceId > 0L && result.resolvedFaviconUrl.isNotBlank()) {
+            runCatching {
+                dao.updateCustomSourceFavicon(sourceId, result.resolvedFaviconUrl)
+            }
+        }
+        return result
     }
 
     suspend fun importLocalCbz(uri: Uri): MangaItem {
@@ -572,6 +616,7 @@ class MangaRepository(
             }
         }
 
+        KotatsuWidgetManager.refreshAllWidgetsAsync(appContext)
         FavoritesUpdateSummary(
             checkedCount = favorites.size,
             mangasWithNewCount = mangasWithNew,
@@ -674,6 +719,7 @@ class MangaRepository(
             manga
         }
         dao.setCategoriesForManga(MangaEntity.fromDomain(enriched), selectedCategoryIds)
+        KotatsuWidgetManager.refreshAllWidgetsAsync(appContext)
     }
 
     suspend fun updateMangasCategoriesBatch(mangas: List<MangaItem>, selectedCategoryIds: Set<Long>) {
@@ -682,6 +728,7 @@ class MangaRepository(
             mangas = mangas.map(MangaEntity::fromDomain),
             categoryIds = selectedCategoryIds
         )
+        KotatsuWidgetManager.refreshAllWidgetsAsync(appContext)
     }
 
     suspend fun markAllChaptersCompleted(manga: MangaItem, chapters: List<ChapterItem>) {
@@ -765,6 +812,7 @@ class MangaRepository(
                 )
             )
         }
+        KotatsuWidgetManager.refreshAllWidgetsAsync(appContext)
     }
 
     suspend fun toggleChapterCompleted(manga: MangaItem, chapterId: String, completed: Boolean) {
@@ -774,14 +822,17 @@ class MangaRepository(
         } else {
             dao.unmarkChapterCompleted(manga.id, chapterId)
         }
+        KotatsuWidgetManager.refreshAllWidgetsAsync(appContext)
     }
 
     suspend fun deleteHistoryItem(mangaId: String) {
         dao.deleteHistoryForManga(mangaId)
+        KotatsuWidgetManager.refreshAllWidgetsAsync(appContext)
     }
 
     suspend fun clearAllHistory() {
         dao.clearAllHistory()
+        KotatsuWidgetManager.refreshAllWidgetsAsync(appContext)
     }
 
     // Page Bookmarks

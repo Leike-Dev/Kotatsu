@@ -11,12 +11,16 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import org.koitharu.kotatsu.domain.model.AppColorPalette
 import org.koitharu.kotatsu.domain.model.AppPreferences
 import org.koitharu.kotatsu.domain.model.AppThemeMode
 import org.koitharu.kotatsu.domain.model.ChapterDisplayMode
+import org.koitharu.kotatsu.domain.model.CoverCornerStyle
+import org.koitharu.kotatsu.domain.model.DefaultStartTab
 import org.koitharu.kotatsu.domain.model.DohProvider
 import org.koitharu.kotatsu.domain.model.ExploreLayoutMode
 import org.koitharu.kotatsu.domain.model.LanguageFilter
+import org.koitharu.kotatsu.domain.model.NavLabelBehavior
 import org.koitharu.kotatsu.domain.model.ReaderBackground
 import org.koitharu.kotatsu.domain.model.ReaderMode
 import org.koitharu.kotatsu.domain.model.ReaderScaleMode
@@ -32,9 +36,15 @@ class UserPreferencesRepository(
 
     private object Keys {
         val THEME_MODE = stringPreferencesKey("theme_mode")
+        val COLOR_PALETTE = stringPreferencesKey("color_palette")
         val AMOLED_DARK = booleanPreferencesKey("amoled_dark")
         val DYNAMIC_COLORS = booleanPreferencesKey("dynamic_colors")
+        val COVER_CORNER_STYLE = stringPreferencesKey("cover_corner_style")
+        val NAV_LABEL_BEHAVIOR = stringPreferencesKey("nav_label_behavior")
+        val DEFAULT_START_TAB = stringPreferencesKey("default_start_tab")
         val SHOW_SOURCE_BADGES = booleanPreferencesKey("show_source_badges")
+        val SHOW_UNREAD_BADGES = booleanPreferencesKey("show_unread_badges_on_covers")
+        val SHOW_PROGRESS_COVERS = booleanPreferencesKey("show_progress_on_covers")
 
         val EXPLORE_LAYOUT = stringPreferencesKey("explore_layout")
         val SHOW_EXPLORE_SPOTLIGHT = booleanPreferencesKey("show_explore_spotlight")
@@ -81,9 +91,23 @@ class UserPreferencesRepository(
             themeMode = prefs[Keys.THEME_MODE]
                 ?.let { runCatching { AppThemeMode.valueOf(it) }.getOrNull() }
                 ?: AppThemeMode.DARK,
+            colorPalette = prefs[Keys.COLOR_PALETTE]
+                ?.let { runCatching { AppColorPalette.valueOf(it) }.getOrNull() }
+                ?: AppColorPalette.KOTATSU_VERMILION,
             amoledDark = prefs[Keys.AMOLED_DARK] ?: false,
             dynamicColors = prefs[Keys.DYNAMIC_COLORS] ?: false,
+            coverCornerStyle = prefs[Keys.COVER_CORNER_STYLE]
+                ?.let { runCatching { CoverCornerStyle.valueOf(it) }.getOrNull() }
+                ?: CoverCornerStyle.EXPRESSIVE,
+            navLabelBehavior = prefs[Keys.NAV_LABEL_BEHAVIOR]
+                ?.let { runCatching { NavLabelBehavior.valueOf(it) }.getOrNull() }
+                ?: NavLabelBehavior.SELECTED_ONLY,
+            defaultStartTab = prefs[Keys.DEFAULT_START_TAB]
+                ?.let { runCatching { DefaultStartTab.valueOf(it) }.getOrNull() }
+                ?: DefaultStartTab.EXPLORE,
             showSourceBadges = prefs[Keys.SHOW_SOURCE_BADGES] ?: true,
+            showUnreadBadgesOnCovers = prefs[Keys.SHOW_UNREAD_BADGES] ?: true,
+            showProgressOnCovers = prefs[Keys.SHOW_PROGRESS_COVERS] ?: true,
 
             exploreLayoutMode = prefs[Keys.EXPLORE_LAYOUT]
                 ?.let { runCatching { ExploreLayoutMode.valueOf(it) }.getOrNull() }
@@ -150,6 +174,10 @@ class UserPreferencesRepository(
         dataStore.edit { it[Keys.THEME_MODE] = mode.name }
     }
 
+    suspend fun setColorPalette(palette: AppColorPalette) {
+        dataStore.edit { it[Keys.COLOR_PALETTE] = palette.name }
+    }
+
     suspend fun setAmoledDark(enabled: Boolean) {
         dataStore.edit { it[Keys.AMOLED_DARK] = enabled }
     }
@@ -158,8 +186,28 @@ class UserPreferencesRepository(
         dataStore.edit { it[Keys.DYNAMIC_COLORS] = enabled }
     }
 
+    suspend fun setCoverCornerStyle(style: CoverCornerStyle) {
+        dataStore.edit { it[Keys.COVER_CORNER_STYLE] = style.name }
+    }
+
+    suspend fun setNavLabelBehavior(behavior: NavLabelBehavior) {
+        dataStore.edit { it[Keys.NAV_LABEL_BEHAVIOR] = behavior.name }
+    }
+
+    suspend fun setDefaultStartTab(tab: DefaultStartTab) {
+        dataStore.edit { it[Keys.DEFAULT_START_TAB] = tab.name }
+    }
+
     suspend fun setShowSourceBadges(enabled: Boolean) {
         dataStore.edit { it[Keys.SHOW_SOURCE_BADGES] = enabled }
+    }
+
+    suspend fun setShowUnreadBadgesOnCovers(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_UNREAD_BADGES] = enabled }
+    }
+
+    suspend fun setShowProgressOnCovers(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_PROGRESS_COVERS] = enabled }
     }
 
     suspend fun setExploreLayoutMode(mode: ExploreLayoutMode) {
@@ -295,9 +343,15 @@ class UserPreferencesRepository(
         val current = preferencesFlow.first()
         return mapOf(
             "themeMode" to current.themeMode.name,
+            "colorPalette" to current.colorPalette.name,
             "amoledDark" to current.amoledDark.toString(),
             "dynamicColors" to current.dynamicColors.toString(),
+            "coverCornerStyle" to current.coverCornerStyle.name,
+            "navLabelBehavior" to current.navLabelBehavior.name,
+            "defaultStartTab" to current.defaultStartTab.name,
             "showSourceBadges" to current.showSourceBadges.toString(),
+            "showUnreadBadgesOnCovers" to current.showUnreadBadgesOnCovers.toString(),
+            "showProgressOnCovers" to current.showProgressOnCovers.toString(),
             "exploreLayoutMode" to current.exploreLayoutMode.name,
             "showExploreSpotlight" to current.showExploreSpotlight.toString(),
             "showExploreSourcesBar" to current.showExploreSourcesBar.toString(),
@@ -333,9 +387,19 @@ class UserPreferencesRepository(
         dataStore.edit { prefs ->
             map["themeMode"]?.let { runCatching { AppThemeMode.valueOf(it) }.getOrNull() }
                 ?.let { prefs[Keys.THEME_MODE] = it.name }
+            map["colorPalette"]?.let { runCatching { AppColorPalette.valueOf(it) }.getOrNull() }
+                ?.let { prefs[Keys.COLOR_PALETTE] = it.name }
             map["amoledDark"]?.toBooleanStrictOrNull()?.let { prefs[Keys.AMOLED_DARK] = it }
             map["dynamicColors"]?.toBooleanStrictOrNull()?.let { prefs[Keys.DYNAMIC_COLORS] = it }
+            map["coverCornerStyle"]?.let { runCatching { CoverCornerStyle.valueOf(it) }.getOrNull() }
+                ?.let { prefs[Keys.COVER_CORNER_STYLE] = it.name }
+            map["navLabelBehavior"]?.let { runCatching { NavLabelBehavior.valueOf(it) }.getOrNull() }
+                ?.let { prefs[Keys.NAV_LABEL_BEHAVIOR] = it.name }
+            map["defaultStartTab"]?.let { runCatching { DefaultStartTab.valueOf(it) }.getOrNull() }
+                ?.let { prefs[Keys.DEFAULT_START_TAB] = it.name }
             map["showSourceBadges"]?.toBooleanStrictOrNull()?.let { prefs[Keys.SHOW_SOURCE_BADGES] = it }
+            map["showUnreadBadgesOnCovers"]?.toBooleanStrictOrNull()?.let { prefs[Keys.SHOW_UNREAD_BADGES] = it }
+            map["showProgressOnCovers"]?.toBooleanStrictOrNull()?.let { prefs[Keys.SHOW_PROGRESS_COVERS] = it }
             map["exploreLayoutMode"]?.let { runCatching { ExploreLayoutMode.valueOf(it) }.getOrNull() }
                 ?.let { prefs[Keys.EXPLORE_LAYOUT] = it.name }
             map["showExploreSpotlight"]?.toBooleanStrictOrNull()?.let { prefs[Keys.SHOW_EXPLORE_SPOTLIGHT] = it }

@@ -7,6 +7,8 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -209,5 +211,99 @@ class KotatsuUiCujRobolectricTest {
         }
         composeTestRule.waitForIdle()
         assertTrue(unlocked)
+    }
+
+    @Test
+    @Config(qualifiers = "w900dp-h1400dp-xhdpi")
+    fun `SettingsScreen organizes appearance palettes, widgets, biometric status, and hosts Local CBZ import`() {
+        val settingsVm = org.koitharu.kotatsu.ui.settings.SettingsViewModel(env.repository)
+
+        composeTestRule.setContent {
+            KotatsuTheme {
+                org.koitharu.kotatsu.ui.settings.SettingsScreen(
+                    viewModel = settingsVm,
+                    showBackButton = false,
+                    onBack = {},
+                    onOpenBrowser = { _, _ -> },
+                    onTriggerLockNow = {}
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        // 1. Appearance category displays palettes, cover corners, nav labels, and M3 Expressive Widget preview
+        composeTestRule.onNodeWithTag("settings_palette_SAKURA_CRIMSON").performClick()
+        composeTestRule.onNodeWithTag("settings_cover_corner_SOFT").performClick()
+        composeTestRule.onNodeWithTag("expressive_widget_preview_card").assertIsDisplayed()
+
+        // 2. Security category displays real Biometric hardware status card
+        composeTestRule.onNodeWithTag("settings_cat_SECURITY").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("biometric_hardware_status_card").assertIsDisplayed()
+
+        // 3. Backup category hosts the moved Local CBZ import button
+        composeTestRule.onNodeWithTag("settings_cat_BACKUP").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("settings_import_cbz_button").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "w800dp-h1280dp-xhdpi")
+    fun `SourcesCatalogScreen displays built-in PT-BR sources and enables source in repository`() {
+        val catalogVm = org.koitharu.kotatsu.ui.sources.SourcesCatalogViewModel(env.repository)
+
+        composeTestRule.setContent {
+            KotatsuTheme {
+                org.koitharu.kotatsu.ui.sources.SourcesCatalogScreen(
+                    viewModel = catalogVm,
+                    onBack = {},
+                    onOpenBrowser = { _, _ -> }
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        // Filter by PT-BR catalog sources and enable LerMangá
+        composeTestRule.onNodeWithTag("sources_region_PT_BR").performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag("toggle_catalog_pt_lermanga")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            runBlocking {
+                env.dao.getAllCustomSourcesList().any {
+                    it.name.contains("LerMangá", ignoreCase = true) && it.enabled
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `ExploreScreen header removes Importar CBZ button and exposes Sources Catalog shortcut`() {
+        val exploreVm = org.koitharu.kotatsu.ui.explore.ExploreViewModel(
+            repository = env.repository,
+            initialQuery = "",
+            initialTagId = ""
+        )
+
+        composeTestRule.setContent {
+            KotatsuTheme {
+                org.koitharu.kotatsu.ui.explore.ExploreScreen(
+                    viewModel = exploreVm,
+                    onOpenManga = {},
+                    onOpenBrowser = { _, _ -> },
+                    onOpenSourcesCatalog = {}
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        // Importar CBZ button must NOT appear on ExploreScreen anymore
+        assertEquals(0, composeTestRule.onAllNodesWithTag("import_cbz_button").fetchSemanticsNodes().size)
+        // Sources catalog button is prominently available
+        composeTestRule.onNodeWithTag("header_sources_catalog_button").assertIsDisplayed()
     }
 }

@@ -271,7 +271,7 @@ interface KotatsuDao {
     @Query(
         """
         UPDATE custom_sources
-        SET name = :name, baseUrl = :baseUrl, searchUrlTemplate = :searchTemplate
+        SET name = :name, baseUrl = :baseUrl, searchUrlTemplate = :searchTemplate, faviconUrl = :faviconUrl
         WHERE id = :sourceId
         """
     )
@@ -279,8 +279,12 @@ interface KotatsuDao {
         sourceId: Long,
         name: String,
         baseUrl: String,
-        searchTemplate: String
+        searchTemplate: String,
+        faviconUrl: String
     )
+
+    @Query("UPDATE custom_sources SET faviconUrl = :faviconUrl WHERE id = :sourceId")
+    suspend fun updateCustomSourceFavicon(sourceId: Long, faviconUrl: String)
 
     @Query("DELETE FROM custom_sources WHERE id = :sourceId")
     suspend fun deleteCustomSource(sourceId: Long)

@@ -326,6 +326,124 @@ class CustomSiteParser(private val httpClient: OkHttpClient) {
         }.getOrNull()
     }
 
+    suspend fun probeSiteHealthAndFavicon(
+        baseUrl: String,
+        sourceName: String = "",
+        probeUrlOverride: String? = null
+    ): org.koitharu.kotatsu.domain.model.SourceHealthCheckResult = withContext(Dispatchers.IO) {
+        val normalizedOrigin = SourceCatalogDirectory.normalizeOrigin(baseUrl)
+        val targetUrl = (probeUrlOverride?.takeIf { it.isNotBlank() } ?: normalizedOrigin)
+            .toHttpUrlOrNull()
+            ?: return@withContext org.koitharu.kotatsu.domain.model.SourceHealthCheckResult(
+                state = org.koitharu.kotatsu.domain.model.SourceHealthState.ERROR,
+                message = "URL inválida"
+            )
+
+        val fallbackFavicon = SourceCatalogDirectory.defaultFaviconUrl(normalizedOrigin)
+        val req = Request.Builder()
+            .url(targetUrl)
+            .header("User-Agent", WebProtectionEngine.activeUserAgent.get())
+            .header(
+                "Accept",
+                "text/html,application/xhtml+xml,application/json,application/xml;q=0.9,*/*;q=0.8"
+            )
+            .header("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
+            .header("Referer", "$normalizedOrigin/")
+            .get()
+            .build()
+
+        val startNanos = System.nanoTime()
+        runCatching {
+            httpClient.newCall(req).execute().use { resp ->
+                val elapsedMs = ((System.nanoTime() - startNanos) / 1_000_000L).coerceAtLeast(1L)
+                val code = resp.code
+                val serverHeader = resp.header("Server").orEmpty().lowercase()
+                val hasCfRay = resp.header("cf-ray") != null || serverHeader.contains("cloudflare")
+                val bodySnippet = resp.body?.string().orEmpty()
+                val lowerSnippet = bodySnippet.take(8_000).lowercase()
+
+                val isCloudflareChallenge = (code == 403 || code == 503 || code == 429) && hasCfRay ||
+                    lowerSnippet.contains("just a moment...") ||
+                    lowerSnippet.contains("cf-browser-verification") ||
+                    lowerSnippet.contains("challenge-platform") ||
+                    lowerSnippet.contains("attention required! | cloudflare")
+
+                if (isCloudflareChallenge) {
+                    return@withContext org.koitharu.kotatsu.domain.model.SourceHealthCheckResult(
+                        state = org.koitharu.kotatsu.domain.model.SourceHealthState.CLOUDFLARE_PROTECTED,
+                        httpCode = code,
+                        latencyMs = elapsedMs,
+                        detectedTitle = sourceName,
+                        resolvedFaviconUrl = fallbackFavicon,
+                        message = "Proteção Cloudflare detectada ($elapsedMs ms) — use o Navegador Protegido"
+                    )
+                }
+
+                if (!resp.isSuccessful) {
+                    return@withContext org.koitharu.kotatsu.domain.model.SourceHealthCheckResult(
+                        state = org.koitharu.kotatsu.domain.model.SourceHealthState.ERROR,
+                        httpCode = code,
+                        latencyMs = elapsedMs,
+                        resolvedFaviconUrl = fallbackFavicon,
+                        message = "Erro HTTP $code ($elapsedMs ms)"
+                    )
+                }
+
+                // JSON API response (e.g. MangaDex / Kitsu)
+                val trimmedBody = bodySnippet.trimStart()
+                if (trimmedBody.startsWith("{") || trimmedBody.startsWith("[")) {
+                    return@withContext org.koitharu.kotatsu.domain.model.SourceHealthCheckResult(
+                        state = org.koitharu.kotatsu.domain.model.SourceHealthState.ONLINE,
+                        httpCode = code,
+                        latencyMs = elapsedMs,
+                        detectedTitle = sourceName,
+                        resolvedFaviconUrl = fallbackFavicon,
+                        sampleWorksCount = 10,
+                        message = "API online • $elapsedMs ms"
+                    )
+                }
+
+                val doc = Jsoup.parse(bodySnippet, targetUrl.toString())
+                val pageTitle = doc.title().trim().take(60)
+                val discoveredFavicon = SourceCatalogDirectory.extractFaviconFromDocument(
+                    doc = doc,
+                    pageUrl = normalizedOrigin
+                ).ifBlank { fallbackFavicon }
+                val sampleItems = runCatching {
+                    parseCatalogHtml(
+                        html = bodySnippet,
+                        baseUrl = targetUrl.toString(),
+                        sourceName = sourceName.ifBlank { pageTitle }
+                    ).size
+                }.getOrDefault(0)
+
+                val summaryMsg = if (sampleItems > 0) {
+                    "Online • $elapsedMs ms • $sampleItems obras detectadas"
+                } else {
+                    "Online • $elapsedMs ms • Leitura via Navegador"
+                }
+
+                org.koitharu.kotatsu.domain.model.SourceHealthCheckResult(
+                    state = org.koitharu.kotatsu.domain.model.SourceHealthState.ONLINE,
+                    httpCode = code,
+                    latencyMs = elapsedMs,
+                    detectedTitle = pageTitle,
+                    resolvedFaviconUrl = discoveredFavicon,
+                    sampleWorksCount = sampleItems,
+                    message = summaryMsg
+                )
+            }
+        }.getOrElse { err ->
+            val elapsedMs = ((System.nanoTime() - startNanos) / 1_000_000L).coerceAtLeast(1L)
+            org.koitharu.kotatsu.domain.model.SourceHealthCheckResult(
+                state = org.koitharu.kotatsu.domain.model.SourceHealthState.ERROR,
+                latencyMs = elapsedMs,
+                resolvedFaviconUrl = fallbackFavicon,
+                message = "Sem resposta (${err.javaClass.simpleName})"
+            )
+        }
+    }
+
     companion object {
         fun sha1Short(input: String): String {
             val bytes = MessageDigest.getInstance("SHA-1").digest(input.toByteArray())

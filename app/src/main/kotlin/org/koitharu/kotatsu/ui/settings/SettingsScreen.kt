@@ -41,21 +41,28 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.CleaningServices
+import androidx.compose.material.icons.outlined.DashboardCustomize
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Navigation
+import androidx.compose.material.icons.outlined.NetworkCheck
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -65,6 +72,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -79,7 +87,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
-import androidx.compose.material3.TonalToggleButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
@@ -90,7 +97,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -98,22 +104,33 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koitharu.kotatsu.R
+import org.koitharu.kotatsu.domain.model.AppColorPalette
 import org.koitharu.kotatsu.domain.model.AppPreferences
 import org.koitharu.kotatsu.domain.model.AppThemeMode
 import org.koitharu.kotatsu.domain.model.ChapterDisplayMode
+import org.koitharu.kotatsu.domain.model.CoverCornerStyle
 import org.koitharu.kotatsu.domain.model.CustomMangaSource
+import org.koitharu.kotatsu.domain.model.DefaultStartTab
 import org.koitharu.kotatsu.domain.model.DohProvider
 import org.koitharu.kotatsu.domain.model.ExploreLayoutMode
 import org.koitharu.kotatsu.domain.model.LanguageFilter
 import org.koitharu.kotatsu.domain.model.LibraryStats
+import org.koitharu.kotatsu.domain.model.MangaItem
+import org.koitharu.kotatsu.domain.model.NavLabelBehavior
 import org.koitharu.kotatsu.domain.model.ReaderBackground
 import org.koitharu.kotatsu.domain.model.ReaderMode
 import org.koitharu.kotatsu.domain.model.ReaderScaleMode
+import org.koitharu.kotatsu.domain.model.SourceHealthCheckResult
+import org.koitharu.kotatsu.domain.model.SourceHealthState
 import org.koitharu.kotatsu.ui.components.AddCustomSourceDialog
+import org.koitharu.kotatsu.ui.components.SourceFaviconBadge
+import org.koitharu.kotatsu.ui.security.BiometricAuthHelper
+import org.koitharu.kotatsu.widget.KotatsuWidgetManager
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -132,6 +149,8 @@ fun SettingsScreen(
     showBackButton: Boolean,
     onBack: () -> Unit,
     onOpenBrowser: (url: String, title: String) -> Unit,
+    onOpenSourcesCatalog: () -> Unit = {},
+    onOpenManga: (MangaItem) -> Unit = {},
     onTriggerLockNow: () -> Unit,
     bottomClearance: Dp = 24.dp,
     modifier: Modifier = Modifier
@@ -139,8 +158,11 @@ fun SettingsScreen(
     val context = LocalContext.current
     val prefs by viewModel.preferences.collectAsStateWithLifecycle()
     val customSources by viewModel.customSources.collectAsStateWithLifecycle()
+    val localMangas by viewModel.localMangas.collectAsStateWithLifecycle()
     val stats by viewModel.libraryStats.collectAsStateWithLifecycle()
     val cacheSizeBytes by viewModel.cacheSizeBytes.collectAsStateWithLifecycle()
+    val isImportingCbz by viewModel.isImportingCbz.collectAsStateWithLifecycle()
+    val sourceTestResults by viewModel.sourceTestResults.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val snackbarMsg by viewModel.snackbarMessage.collectAsStateWithLifecycle()
 
@@ -164,6 +186,16 @@ fun SettingsScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) viewModel.restoreBackup(uri)
+    }
+
+    val cbzPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importCbzFile(uri) { imported ->
+                onOpenManga(imported)
+            }
+        }
     }
 
     LaunchedEffect(selectedCategory) {
@@ -230,6 +262,18 @@ fun SettingsScreen(
     fun launchDatedBackupExport() {
         val dateSuffix = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         exportBackupLauncher.launch("kotatsu_backup_$dateSuffix.json")
+    }
+
+    fun launchCbzImportPicker() {
+        cbzPickerLauncher.launch(
+            arrayOf(
+                "application/vnd.comicbook+zip",
+                "application/zip",
+                "application/x-cbz",
+                "application/octet-stream",
+                "*/*"
+            )
+        )
     }
 
     val motionScheme = MaterialTheme.motionScheme
@@ -343,7 +387,8 @@ fun SettingsScreen(
                                             text = stringResource(meta.subtitleRes),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 2
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }
@@ -373,11 +418,17 @@ fun SettingsScreen(
                                     category = activeCat,
                                     prefs = prefs,
                                     customSources = customSources,
+                                    localMangas = localMangas,
                                     stats = stats,
                                     formattedCacheSize = formattedCacheSize,
+                                    isImportingCbz = isImportingCbz,
+                                    sourceTestResults = sourceTestResults,
                                     viewModel = viewModel,
                                     onShowAddSource = { showAddSourceDialog = true },
                                     onEditSource = { editingSource = it },
+                                    onOpenSourcesCatalog = onOpenSourcesCatalog,
+                                    onOpenManga = onOpenManga,
+                                    onLaunchCbzPicker = ::launchCbzImportPicker,
                                     onShowPinSetup = { showPinDialog = true },
                                     onOpenBrowser = onOpenBrowser,
                                     onTriggerLockNow = onTriggerLockNow,
@@ -429,6 +480,7 @@ fun SettingsScreen(
                                 checked = selected,
                                 onCheckedChange = { viewModel.selectCategory(meta.category) },
                                 shapes = ToggleButtonDefaults.shapes(),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                                 modifier = Modifier
                                     .minimumInteractiveComponentSize()
                                     .animateContentSize(motionScheme.fastSpatialSpec())
@@ -440,7 +492,11 @@ fun SettingsScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(meta.titleRes))
+                                Text(
+                                    text = stringResource(meta.titleRes),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
                         }
                     }
@@ -471,11 +527,17 @@ fun SettingsScreen(
                                     category = activeCat,
                                     prefs = prefs,
                                     customSources = customSources,
+                                    localMangas = localMangas,
                                     stats = stats,
                                     formattedCacheSize = formattedCacheSize,
+                                    isImportingCbz = isImportingCbz,
+                                    sourceTestResults = sourceTestResults,
                                     viewModel = viewModel,
                                     onShowAddSource = { showAddSourceDialog = true },
                                     onEditSource = { editingSource = it },
+                                    onOpenSourcesCatalog = onOpenSourcesCatalog,
+                                    onOpenManga = onOpenManga,
+                                    onLaunchCbzPicker = ::launchCbzImportPicker,
                                     onShowPinSetup = { showPinDialog = true },
                                     onOpenBrowser = onOpenBrowser,
                                     onTriggerLockNow = onTriggerLockNow,
@@ -599,45 +661,51 @@ private fun SettingsDetailPaneContent(
     category: SettingsCategory,
     prefs: AppPreferences,
     customSources: List<CustomMangaSource>,
+    localMangas: List<MangaItem>,
     stats: LibraryStats,
     formattedCacheSize: String,
+    isImportingCbz: Boolean,
+    sourceTestResults: Map<Long, SourceHealthCheckResult>,
     viewModel: SettingsViewModel,
     onShowAddSource: () -> Unit,
     onEditSource: (CustomMangaSource) -> Unit,
+    onOpenSourcesCatalog: () -> Unit,
+    onOpenManga: (MangaItem) -> Unit,
+    onLaunchCbzPicker: () -> Unit,
     onShowPinSetup: () -> Unit,
     onOpenBrowser: (String, String) -> Unit,
     onTriggerLockNow: () -> Unit,
     onExportBackup: () -> Unit,
     onRestoreBackup: () -> Unit
 ) {
-    Surface(
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 2.dp,
+    val context = LocalContext.current
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.padding(20.dp)
-        ) {
-            when (category) {
-                SettingsCategory.APPEARANCE -> {
-                    SectionHeadline(stringResource(R.string.settings_cat_appearance))
+        when (category) {
+            SettingsCategory.APPEARANCE -> {
+                SectionHeadline(stringResource(R.string.settings_cat_appearance))
 
+                // 1. Theme & Expressive Color Palettes
+                SettingsGroupCard(
+                    icon = Icons.Outlined.Palette,
+                    title = stringResource(R.string.settings_group_theme_palette)
+                ) {
                     ChoiceGroupLabel(stringResource(R.string.theme_mode_label))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         AppThemeMode.entries.forEach { mode ->
-                            val selected = prefs.themeMode == mode
                             val labelRes = when (mode) {
                                 AppThemeMode.DARK -> R.string.theme_dark
                                 AppThemeMode.LIGHT -> R.string.theme_light
                                 AppThemeMode.SYSTEM -> R.string.theme_system
                             }
                             ExpressiveOptionToggle(
-                                selected = selected,
+                                selected = prefs.themeMode == mode,
                                 label = stringResource(labelRes),
                                 onClick = { viewModel.setThemeMode(mode) },
                                 tag = "settings_theme_${mode.name}"
@@ -663,6 +731,71 @@ private fun SettingsDetailPaneContent(
                         )
                     }
 
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f))
+
+                    ChoiceGroupLabel(stringResource(R.string.color_palette_label))
+                    if (prefs.dynamicColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        Text(
+                            text = stringResource(R.string.color_palette_dynamic_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        AppColorPalette.entries.forEach { palette ->
+                            val labelRes = when (palette) {
+                                AppColorPalette.KOTATSU_VERMILION -> R.string.palette_vermilion
+                                AppColorPalette.SAKURA_CRIMSON -> R.string.palette_sakura
+                                AppColorPalette.OCEAN_SAPPHIRE -> R.string.palette_ocean
+                                AppColorPalette.EMERALD_JADE -> R.string.palette_emerald
+                                AppColorPalette.ROYAL_AMETHYST -> R.string.palette_amethyst
+                                AppColorPalette.SOLAR_AMBER -> R.string.palette_solar
+                            }
+                            val isSelected = prefs.colorPalette == palette &&
+                                !(prefs.dynamicColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                            PaletteSwatchCard(
+                                palette = palette,
+                                label = stringResource(labelRes),
+                                selected = isSelected,
+                                onClick = {
+                                    if (prefs.dynamicColors) {
+                                        viewModel.setDynamicColors(false)
+                                    }
+                                    viewModel.setColorPalette(palette)
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // 2. Cards, Covers & Badges
+                SettingsGroupCard(
+                    icon = Icons.Outlined.DashboardCustomize,
+                    title = stringResource(R.string.settings_group_cards_covers)
+                ) {
+                    ChoiceGroupLabel(stringResource(R.string.cover_corner_style_label))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CoverCornerStyle.entries.forEach { style ->
+                            val labelRes = when (style) {
+                                CoverCornerStyle.EXPRESSIVE -> R.string.cover_corner_expressive
+                                CoverCornerStyle.SOFT -> R.string.cover_corner_soft
+                                CoverCornerStyle.SHARP -> R.string.cover_corner_sharp
+                            }
+                            ExpressiveOptionToggle(
+                                selected = prefs.coverCornerStyle == style,
+                                label = stringResource(labelRes),
+                                onClick = { viewModel.setCoverCornerStyle(style) },
+                                tag = "settings_cover_corner_${style.name}"
+                            )
+                        }
+                    }
+
                     SettingsSwitchRow(
                         title = stringResource(R.string.toggle_badges_label),
                         subtitle = stringResource(R.string.toggle_badges_sub),
@@ -670,11 +803,100 @@ private fun SettingsDetailPaneContent(
                         onCheckedChange = viewModel::setShowSourceBadges,
                         tag = "switch_source_badges"
                     )
+
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.toggle_unread_badges_label),
+                        subtitle = stringResource(R.string.toggle_unread_badges_sub),
+                        checked = prefs.showUnreadBadgesOnCovers,
+                        onCheckedChange = viewModel::setShowUnreadBadgesOnCovers,
+                        tag = "switch_unread_badges"
+                    )
+
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.toggle_progress_covers_label),
+                        subtitle = stringResource(R.string.toggle_progress_covers_sub),
+                        checked = prefs.showProgressOnCovers,
+                        onCheckedChange = viewModel::setShowProgressOnCovers,
+                        tag = "switch_progress_covers"
+                    )
                 }
 
-                SettingsCategory.READER -> {
-                    SectionHeadline(stringResource(R.string.settings_cat_reader))
+                // 3. Navigation Dock & Default Start Tab
+                SettingsGroupCard(
+                    icon = Icons.Outlined.Navigation,
+                    title = stringResource(R.string.settings_group_navigation)
+                ) {
+                    ChoiceGroupLabel(stringResource(R.string.nav_labels_behavior_label))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        NavLabelBehavior.entries.forEach { behavior ->
+                            val labelRes = when (behavior) {
+                                NavLabelBehavior.SELECTED_ONLY -> R.string.nav_labels_selected
+                                NavLabelBehavior.ALWAYS -> R.string.nav_labels_always
+                                NavLabelBehavior.HIDDEN -> R.string.nav_labels_hidden
+                            }
+                            ExpressiveOptionToggle(
+                                selected = prefs.navLabelBehavior == behavior,
+                                label = stringResource(labelRes),
+                                onClick = { viewModel.setNavLabelBehavior(behavior) },
+                                tag = "settings_nav_labels_${behavior.name}"
+                            )
+                        }
+                    }
 
+                    ChoiceGroupLabel(stringResource(R.string.default_start_tab_label))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        DefaultStartTab.entries.forEach { tab ->
+                            val labelRes = when (tab) {
+                                DefaultStartTab.EXPLORE -> R.string.nav_explore
+                                DefaultStartTab.FAVORITES -> R.string.nav_favorites
+                                DefaultStartTab.HISTORY -> R.string.nav_history
+                                DefaultStartTab.BOOKMARKS -> R.string.nav_bookmarks
+                            }
+                            ExpressiveOptionToggle(
+                                selected = prefs.defaultStartTab == tab,
+                                label = stringResource(labelRes),
+                                onClick = { viewModel.setDefaultStartTab(tab) },
+                                tag = "settings_start_tab_${tab.name}"
+                            )
+                        }
+                    }
+                }
+
+                // 4. Material Design 3 Expressive Widgets
+                SettingsGroupCard(
+                    icon = Icons.Outlined.Widgets,
+                    title = stringResource(R.string.settings_group_widgets)
+                ) {
+                    val pinnedMsg = stringResource(R.string.widget_pin_requested_msg)
+                    val manualMsg = stringResource(R.string.widget_pin_manual_msg)
+                    ExpressiveWidgetsShowcaseCard(
+                        stats = stats,
+                        onPinContinue = {
+                            val ok = KotatsuWidgetManager.requestPinContinueWidget(context)
+                            viewModel.postSnackbarMessage(if (ok) pinnedMsg else manualMsg)
+                        },
+                        onPinShelf = {
+                            val ok = KotatsuWidgetManager.requestPinShelfWidget(context)
+                            viewModel.postSnackbarMessage(if (ok) pinnedMsg else manualMsg)
+                        },
+                        onSyncNow = { viewModel.syncWidgetsNow(context) }
+                    )
+                }
+            }
+
+            SettingsCategory.READER -> {
+                SectionHeadline(stringResource(R.string.settings_cat_reader))
+
+                SettingsGroupCard(
+                    icon = Icons.Outlined.AutoStories,
+                    title = stringResource(R.string.settings_group_reading_mode)
+                ) {
                     ChoiceGroupLabel(stringResource(R.string.default_reader_mode_label))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -737,11 +959,12 @@ private fun SettingsDetailPaneContent(
                             )
                         }
                     }
+                }
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-
-                    ChoiceGroupLabel(stringResource(R.string.reader_color_effects_label))
-
+                SettingsGroupCard(
+                    icon = Icons.Outlined.Palette,
+                    title = stringResource(R.string.settings_group_visual_filters)
+                ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -751,8 +974,10 @@ private fun SettingsDetailPaneContent(
                             Text(
                                 text = stringResource(R.string.reader_brightness_dim_label),
                                 style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
                             )
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "${(prefs.readerBrightnessDim * 100).roundToInt()}%",
                                 style = MaterialTheme.typography.labelLarge,
@@ -783,9 +1008,12 @@ private fun SettingsDetailPaneContent(
                         onCheckedChange = viewModel::setReaderInvertColors,
                         tag = "switch_reader_invert"
                     )
+                }
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-
+                SettingsGroupCard(
+                    icon = Icons.Outlined.Tune,
+                    title = stringResource(R.string.settings_group_reader_controls)
+                ) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.reader_keep_screen_on_label),
                         subtitle = stringResource(R.string.reader_keep_screen_on_sub),
@@ -836,10 +1064,15 @@ private fun SettingsDetailPaneContent(
                         tag = "switch_data_saver"
                     )
                 }
+            }
 
-                SettingsCategory.EXPLORE -> {
-                    SectionHeadline(stringResource(R.string.settings_cat_explore))
+            SettingsCategory.EXPLORE -> {
+                SectionHeadline(stringResource(R.string.settings_cat_explore))
 
+                SettingsGroupCard(
+                    icon = Icons.Outlined.Explore,
+                    title = stringResource(R.string.settings_group_explore_display)
+                ) {
                     ChoiceGroupLabel(stringResource(R.string.layout_mode_label))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -901,9 +1134,12 @@ private fun SettingsDetailPaneContent(
                             )
                         }
                     }
+                }
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-
+                SettingsGroupCard(
+                    icon = Icons.Outlined.DashboardCustomize,
+                    title = stringResource(R.string.settings_group_explore_sections)
+                ) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.toggle_spotlight_label),
                         subtitle = stringResource(R.string.toggle_spotlight_sub),
@@ -916,7 +1152,7 @@ private fun SettingsDetailPaneContent(
                         subtitle = stringResource(R.string.toggle_sources_bar_sub),
                         checked = prefs.showExploreSourcesBar,
                         onCheckedChange = viewModel::setShowExploreSourcesBar,
-                        tag = "switch_explore_sources"
+                        tag = "switch_explore_sources_bar"
                     )
                     SettingsSwitchRow(
                         title = stringResource(R.string.toggle_genres_strip_label),
@@ -940,28 +1176,63 @@ private fun SettingsDetailPaneContent(
                         tag = "switch_hide_nsfw"
                     )
                 }
+            }
 
-                SettingsCategory.SOURCES -> {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
+            SettingsCategory.SOURCES -> {
+                SectionHeadline(stringResource(R.string.settings_cat_sources))
+
+                // Hero Card to Open Full Catalog & Site Connectivity Tester
+                SettingsGroupCard(
+                    icon = Icons.Outlined.Language,
+                    title = stringResource(R.string.manage_sources_catalog_title)
+                ) {
+                    Text(
+                        text = stringResource(R.string.manage_sources_catalog_sub),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        SectionHeadline(stringResource(R.string.settings_cat_sources))
                         Button(
+                            onClick = onOpenSourcesCatalog,
+                            shapes = ButtonDefaults.shapes(),
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .testTag("open_sources_catalog_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.NetworkCheck,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(stringResource(R.string.manage_sources_catalog_button))
+                        }
+
+                        FilledTonalButton(
                             onClick = onShowAddSource,
                             shapes = ButtonDefaults.shapes(),
                             modifier = Modifier
                                 .minimumInteractiveComponentSize()
                                 .testTag("settings_add_source_button")
                         ) {
-                            Icon(imageVector = Icons.Outlined.Add, contentDescription = null)
+                            Icon(
+                                imageVector = Icons.Outlined.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(stringResource(R.string.add_source_button))
                         }
                     }
 
-                    // Primary Built-in MangaDex Catalog Card (non-deceptive active status + open in browser)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f))
+
+                    // Primary Built-in MangaDex Catalog Card
                     Surface(
                         shape = MaterialTheme.shapes.large,
                         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -971,8 +1242,14 @@ private fun SettingsDetailPaneContent(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.padding(14.dp)
                         ) {
+                            SourceFaviconBadge(
+                                name = "MangaDex",
+                                baseUrl = "https://mangadex.org",
+                                size = 38.dp
+                            )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = stringResource(R.string.settings_mangadex_title),
@@ -1014,15 +1291,12 @@ private fun SettingsDetailPaneContent(
                         onCheckedChange = viewModel::setEnableKitsuCatalog,
                         tag = "source_builtin_kitsu"
                     )
+                }
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-
-                    Text(
-                        text = stringResource(R.string.settings_custom_sources_header, customSources.size),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
+                SettingsGroupCard(
+                    icon = Icons.Outlined.Public,
+                    title = stringResource(R.string.settings_custom_sources_header, customSources.size)
+                ) {
                     if (customSources.isEmpty()) {
                         Text(
                             text = stringResource(R.string.settings_custom_sources_empty),
@@ -1031,67 +1305,140 @@ private fun SettingsDetailPaneContent(
                         )
                     } else {
                         customSources.forEach { src ->
+                            val health = sourceTestResults[src.id]
                             Surface(
                                 shape = MaterialTheme.shapes.large,
                                 color = MaterialTheme.colorScheme.surfaceContainer,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.padding(14.dp)
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        SourceFaviconBadge(
+                                            name = src.name,
+                                            baseUrl = src.baseUrl,
+                                            explicitFaviconUrl = health?.resolvedFaviconUrl?.ifBlank { src.faviconUrl }
+                                                ?: src.faviconUrl,
+                                            size = 38.dp
+                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = src.name,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = src.baseUrl,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Switch(
+                                            checked = src.enabled,
+                                            onCheckedChange = { viewModel.toggleCustomSource(src.id, it) }
+                                        )
+                                    }
+
+                                    if (health != null && health.state != SourceHealthState.UNTESTED) {
                                         Text(
-                                            text = src.name,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Text(
-                                            text = src.baseUrl,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = { onOpenBrowser(src.baseUrl, src.name) }
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.OpenInBrowser,
-                                            contentDescription = stringResource(R.string.open_in_webview)
+                                            text = if (health.state == SourceHealthState.TESTING) {
+                                                stringResource(R.string.source_testing_now)
+                                            } else {
+                                                health.message.ifBlank {
+                                                    "HTTP ${health.httpCode} • ${health.latencyMs} ms"
+                                                }
+                                            },
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = when (health.state) {
+                                                SourceHealthState.ONLINE -> MaterialTheme.colorScheme.primary
+                                                SourceHealthState.CLOUDFLARE_PROTECTED -> MaterialTheme.colorScheme.tertiary
+                                                SourceHealthState.ERROR -> MaterialTheme.colorScheme.error
+                                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
                                         )
                                     }
-                                    IconButton(
-                                        onClick = { onEditSource(src) },
-                                        modifier = Modifier.testTag("edit_custom_source_${src.id}")
+
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Edit,
-                                            contentDescription = stringResource(R.string.edit_action)
-                                        )
-                                    }
-                                    Switch(
-                                        checked = src.enabled,
-                                        onCheckedChange = { viewModel.toggleCustomSource(src.id, it) }
-                                    )
-                                    IconButton(
-                                        onClick = { viewModel.deleteCustomSource(src.id) },
-                                        modifier = Modifier.testTag("delete_custom_source_${src.id}")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.DeleteOutline,
-                                            contentDescription = stringResource(R.string.delete_action),
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
+                                        FilledTonalButton(
+                                            onClick = { viewModel.testCustomSource(src) },
+                                            enabled = health?.state != SourceHealthState.TESTING,
+                                            shapes = ButtonDefaults.shapes(),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                            modifier = Modifier
+                                                .minimumInteractiveComponentSize()
+                                                .testTag("settings_test_source_${src.id}")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.NetworkCheck,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(stringResource(R.string.source_test_and_favicon_action))
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = { onOpenBrowser(src.baseUrl, src.name) },
+                                            shapes = ButtonDefaults.shapes(),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                            modifier = Modifier.minimumInteractiveComponentSize()
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.OpenInBrowser,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(stringResource(R.string.source_open_short))
+                                        }
+
+                                        IconButton(
+                                            onClick = { onEditSource(src) },
+                                            modifier = Modifier.testTag("edit_custom_source_${src.id}")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Edit,
+                                                contentDescription = stringResource(R.string.edit_action)
+                                            )
+                                        }
+
+                                        IconButton(
+                                            onClick = { viewModel.deleteCustomSource(src.id) },
+                                            modifier = Modifier.testTag("delete_custom_source_${src.id}")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.DeleteOutline,
+                                                contentDescription = stringResource(R.string.delete_action),
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
+            }
 
-                SettingsCategory.NETWORK -> {
-                    SectionHeadline(stringResource(R.string.settings_cat_network))
+            SettingsCategory.NETWORK -> {
+                SectionHeadline(stringResource(R.string.settings_cat_network))
 
+                SettingsGroupCard(
+                    icon = Icons.Outlined.Shield,
+                    title = stringResource(R.string.settings_group_ad_protection)
+                ) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.ad_shield_label),
                         subtitle = stringResource(R.string.ad_shield_sub),
@@ -1116,7 +1463,12 @@ private fun SettingsDetailPaneContent(
                         onCheckedChange = viewModel::setBlockPopupsRedirects,
                         tag = "switch_popup_block"
                     )
+                }
 
+                SettingsGroupCard(
+                    icon = Icons.Outlined.Public,
+                    title = stringResource(R.string.settings_group_dns_browser)
+                ) {
                     ChoiceGroupLabel(stringResource(R.string.doh_label))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1149,7 +1501,12 @@ private fun SettingsDetailPaneContent(
                             .fillMaxWidth()
                             .testTag("settings_user_agent_input")
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         FilledTonalButton(
                             onClick = { viewModel.setCustomUserAgent(uaDraft) },
                             shapes = ButtonDefaults.shapes(),
@@ -1169,9 +1526,20 @@ private fun SettingsDetailPaneContent(
                         }
                     }
                 }
+            }
 
-                SettingsCategory.SECURITY -> {
-                    SectionHeadline(stringResource(R.string.settings_cat_security))
+            SettingsCategory.SECURITY -> {
+                SectionHeadline(stringResource(R.string.settings_cat_security))
+
+                val biometricState = remember(context) {
+                    BiometricAuthHelper.inspectCapability(context)
+                }
+
+                SettingsGroupCard(
+                    icon = Icons.Outlined.Lock,
+                    title = stringResource(R.string.settings_group_app_lock)
+                ) {
+                    BiometricCapabilityBanner(state = biometricState)
 
                     SettingsSwitchRow(
                         title = stringResource(R.string.app_lock_enable_label),
@@ -1188,7 +1556,11 @@ private fun SettingsDetailPaneContent(
                     )
 
                     if (prefs.appLockEnabled) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             FilledTonalButton(
                                 onClick = onShowPinSetup,
                                 shapes = ButtonDefaults.shapes(),
@@ -1217,9 +1589,12 @@ private fun SettingsDetailPaneContent(
                             tag = "switch_system_credential"
                         )
                     }
+                }
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-
+                SettingsGroupCard(
+                    icon = Icons.Outlined.VisibilityOff,
+                    title = stringResource(R.string.settings_group_privacy)
+                ) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.incognito_mode_label),
                         subtitle = stringResource(R.string.incognito_mode_sub),
@@ -1236,11 +1611,117 @@ private fun SettingsDetailPaneContent(
                         tag = "switch_secure_screen"
                     )
                 }
+            }
 
-                SettingsCategory.BACKUP -> {
-                    SectionHeadline(stringResource(R.string.settings_cat_backup))
+            SettingsCategory.BACKUP -> {
+                SectionHeadline(stringResource(R.string.settings_cat_backup))
 
-                    // Expressive Library Statistics Grid
+                // 1. Local CBZ & ZIP Library Import (Moved cleanly from ExploreScreen)
+                SettingsGroupCard(
+                    icon = Icons.Outlined.FolderZip,
+                    title = stringResource(R.string.settings_group_local_cbz)
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_local_cbz_sub),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Button(
+                        onClick = onLaunchCbzPicker,
+                        enabled = !isImportingCbz,
+                        shapes = ButtonDefaults.shapes(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .minimumInteractiveComponentSize()
+                            .testTag("settings_import_cbz_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.FolderZip,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.settings_import_cbz_action))
+                    }
+
+                    if (isImportingCbz) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(CircleShape)
+                            )
+                            Text(
+                                text = stringResource(R.string.importing_cbz_message),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    if (localMangas.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.settings_local_cbz_empty),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        localMangas.forEach { localItem ->
+                            Surface(
+                                shape = MaterialTheme.shapes.large,
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = localItem.title,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = localItem.badgeText,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.tertiary
+                                        )
+                                    }
+
+                                    FilledTonalButton(
+                                        onClick = { onOpenManga(localItem) },
+                                        shapes = ButtonDefaults.shapes(),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                        modifier = Modifier.minimumInteractiveComponentSize()
+                                    ) {
+                                        Text(stringResource(R.string.settings_open_manga_action))
+                                    }
+
+                                    IconButton(
+                                        onClick = { viewModel.deleteLocalManga(localItem) },
+                                        modifier = Modifier.testTag("delete_local_settings_${localItem.id}")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.DeleteOutline,
+                                            contentDescription = stringResource(R.string.delete_local_manga),
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2. Backup Export, Restore & Statistics
+                SettingsGroupCard(
+                    icon = Icons.Outlined.Backup,
+                    title = stringResource(R.string.settings_group_backup_files)
+                ) {
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -1277,39 +1758,42 @@ private fun SettingsDetailPaneContent(
                         }
                     }
 
-                    Row(
+                    FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Button(
                             onClick = onExportBackup,
                             shapes = ButtonDefaults.shapes(),
                             modifier = Modifier
-                                .weight(1f)
                                 .minimumInteractiveComponentSize()
                                 .testTag("export_backup_button")
                         ) {
                             Icon(imageVector = Icons.Outlined.Backup, contentDescription = null)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(stringResource(R.string.export_backup_json), maxLines = 1)
+                            Text(stringResource(R.string.export_backup_json))
                         }
 
                         FilledTonalButton(
                             onClick = onRestoreBackup,
                             shapes = ButtonDefaults.shapes(),
                             modifier = Modifier
-                                .weight(1f)
                                 .minimumInteractiveComponentSize()
                                 .testTag("restore_backup_button")
                         ) {
                             Icon(imageVector = Icons.Outlined.Restore, contentDescription = null)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(stringResource(R.string.restore_backup_any), maxLines = 1)
+                            Text(stringResource(R.string.restore_backup_any))
                         }
                     }
+                }
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-
+                // 3. Cache & Storage Maintenance
+                SettingsGroupCard(
+                    icon = Icons.Outlined.CleaningServices,
+                    title = stringResource(R.string.settings_group_cache)
+                ) {
                     OutlinedButton(
                         onClick = viewModel::clearMemoryCaches,
                         shapes = ButtonDefaults.shapes(),
@@ -1330,118 +1814,6 @@ private fun SettingsDetailPaneContent(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun SectionHeadline(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.headlineSmall,
-        color = MaterialTheme.colorScheme.onSurface
-    )
-}
-
-@Composable
-private fun ChoiceGroupLabel(label: String) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary
-    )
-}
-
-@Composable
-private fun ExpressiveOptionToggle(
-    selected: Boolean,
-    label: String,
-    onClick: () -> Unit,
-    tag: String
-) {
-    TonalToggleButton(
-        checked = selected,
-        onCheckedChange = { onClick() },
-        shapes = ToggleButtonDefaults.shapes(),
-        modifier = Modifier
-            .minimumInteractiveComponentSize()
-            .animateContentSize(MaterialTheme.motionScheme.fastSpatialSpec())
-            .testTag(tag)
-    ) {
-        if (selected) {
-            Icon(
-                imageVector = Icons.Filled.Check,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-        }
-        Text(text = label)
-    }
-}
-
-@Composable
-private fun SettingsSwitchRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    tag: String,
-    enabled: Boolean = true
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier
-            .fillMaxWidth()
-            .alpha(if (enabled) 1f else 0.55f)
-            .clip(MaterialTheme.shapes.medium)
-            .clickable(enabled = enabled) { onCheckedChange(!checked) }
-            .padding(vertical = 4.dp)
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            enabled = enabled,
-            modifier = Modifier.testTag(tag)
-        )
-    }
-}
-
-@Composable
-private fun StatBadgeCard(label: String, value: Int) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = Modifier.width(126.dp)
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(vertical = 12.dp, horizontal = 10.dp)
-        ) {
-            Text(
-                text = value.toString(),
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

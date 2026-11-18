@@ -1,9 +1,9 @@
 package org.koitharu.kotatsu
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -25,20 +25,26 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableSharedFlow
+import org.koitharu.kotatsu.domain.model.DefaultStartTab
 import org.koitharu.kotatsu.ui.KotatsuAppRoot
+import org.koitharu.kotatsu.ui.WidgetLaunchRequest
 import org.koitharu.kotatsu.ui.reader.LocalSetVolumeKeyCapture
 import org.koitharu.kotatsu.ui.reader.LocalVolumeKeyEvents
 import org.koitharu.kotatsu.ui.security.AppLockScreen
+import org.koitharu.kotatsu.ui.theme.CoverVisualConfig
 import org.koitharu.kotatsu.ui.theme.KotatsuTheme
+import org.koitharu.kotatsu.widget.KotatsuWidgetManager
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val volumeKeyEvents = MutableSharedFlow<Int>(extraBufferCapacity = 8)
+    private var pendingWidgetLaunch by mutableStateOf<WidgetLaunchRequest?>(null)
 
     @Volatile
     private var captureVolumeKeys: Boolean = false
@@ -47,6 +53,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        if (savedInstanceState == null) {
+            pendingWidgetLaunch = parseWidgetLaunchIntent(intent)
+        }
 
         val appContainer = (application as KotatsuApp).container
         val repository = appContainer.mangaRepository
@@ -106,19 +116,29 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                val coverVisualConfig = CoverVisualConfig(
+                    cornerStyle = prefs.coverCornerStyle,
+                    showUnreadBadges = prefs.showUnreadBadgesOnCovers,
+                    showProgressBars = prefs.showProgressOnCovers
+                )
+
                 CompositionLocalProvider(
                     LocalVolumeKeyEvents provides volumeKeyEvents,
                     LocalSetVolumeKeyCapture provides { capture -> captureVolumeKeys = capture }
                 ) {
                     KotatsuTheme(
                         themeMode = prefs.themeMode,
+                        colorPalette = prefs.colorPalette,
                         amoledDark = prefs.amoledDark,
-                        dynamicColors = prefs.dynamicColors
+                        dynamicColors = prefs.dynamicColors,
+                        coverVisualConfig = coverVisualConfig
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             KotatsuAppRoot(
                                 repository = repository,
                                 widthSizeClass = windowSizeClass.widthSizeClass,
+                                widgetLaunchRequest = pendingWidgetLaunch,
+                                onConsumeWidgetLaunch = { pendingWidgetLaunch = null },
                                 onTriggerLockNow = {
                                     if (prefs.appLockEnabled && prefs.appLockPin.length == 4) {
                                         isLocked = true
@@ -149,6 +169,38 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        parseWidgetLaunchIntent(intent)?.let { req ->
+            pendingWidgetLaunch = req
+        }
+    }
+
+    private fun parseWidgetLaunchIntent(intent: Intent?): WidgetLaunchRequest? {
+        if (intent == null) return null
+        val mangaId = intent.getStringExtra(KotatsuWidgetManager.EXTRA_WIDGET_MANGA_ID)
+        val sourceType = intent.getStringExtra(KotatsuWidgetManager.EXTRA_WIDGET_SOURCE_TYPE)
+        val chapterId = intent.getStringExtra(KotatsuWidgetManager.EXTRA_WIDGET_CHAPTER_ID)
+        if (!mangaId.isNullOrBlank() && !sourceType.isNullOrBlank() && !chapterId.isNullOrBlank()) {
+            val pageIndex = intent.getIntExtra(KotatsuWidgetManager.EXTRA_WIDGET_PAGE_INDEX, 0)
+            return WidgetLaunchRequest(
+                mangaId = mangaId,
+                sourceTypeName = sourceType,
+                chapterId = chapterId,
+                pageIndex = pageIndex
+            )
+        }
+        val tabRaw = intent.getStringExtra(KotatsuWidgetManager.EXTRA_WIDGET_TAB)
+        if (!tabRaw.isNullOrBlank()) {
+            val tab = runCatching { DefaultStartTab.valueOf(tabRaw) }.getOrNull()
+            if (tab != null) {
+                return WidgetLaunchRequest(targetTab = tab)
+            }
+        }
+        return null
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {

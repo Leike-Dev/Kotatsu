@@ -6,8 +6,6 @@
 
 package org.koitharu.kotatsu.ui.explore
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,7 +36,7 @@ import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.DashboardCustomize
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Explore
-import androidx.compose.material.icons.outlined.FolderZip
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ButtonDefaults
@@ -49,7 +47,6 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -95,12 +92,14 @@ import org.koitharu.kotatsu.ui.components.FeaturedMangaHeroCard
 import org.koitharu.kotatsu.ui.components.KotatsuPageHeader
 import org.koitharu.kotatsu.ui.components.MangaCoverCard
 import org.koitharu.kotatsu.ui.components.MangaDetailedListCard
+import org.koitharu.kotatsu.ui.components.SourceFaviconBadge
 
 @Composable
 fun ExploreScreen(
     viewModel: ExploreViewModel,
     onOpenManga: (MangaItem) -> Unit,
     onOpenBrowser: (url: String, title: String) -> Unit,
+    onOpenSourcesCatalog: () -> Unit = {},
     onOpenSettings: (() -> Unit)? = null,
     bottomClearance: Dp = 96.dp,
     modifier: Modifier = Modifier
@@ -113,16 +112,6 @@ fun ExploreScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showAddSourceDialog by remember { mutableStateOf(false) }
     var showCustomizeSheet by remember { mutableStateOf(false) }
-
-    val cbzPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            viewModel.importCbzFile(uri) { importedManga ->
-                onOpenManga(importedManga)
-            }
-        }
-    }
 
     LaunchedEffect(uiState.statusSnackbarMessage) {
         val msg = uiState.statusSnackbarMessage
@@ -171,7 +160,7 @@ fun ExploreScreen(
                 .fillMaxSize()
                 .testTag("explore_grid")
         ) {
-            // Balanced Expressive Header + Search + Sources + Separated Filters
+            // Balanced Expressive Header (Import CBZ moved cleanly to Settings)
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     KotatsuPageHeader(
@@ -179,32 +168,14 @@ fun ExploreScreen(
                         subtitle = stringResource(R.string.explore_subtitle),
                         onOpenSettings = onOpenSettings,
                         actions = {
-                            FilledTonalButton(
-                                onClick = {
-                                    cbzPickerLauncher.launch(
-                                        arrayOf(
-                                            "application/vnd.comicbook+zip",
-                                            "application/zip",
-                                            "application/x-cbz",
-                                            "application/octet-stream",
-                                            "*/*"
-                                        )
-                                    )
-                                },
-                                shapes = ButtonDefaults.shapes(),
-                                enabled = !uiState.isImportingCbz,
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                                modifier = Modifier
-                                    .minimumInteractiveComponentSize()
-                                    .testTag("import_cbz_button")
+                            FilledTonalIconButton(
+                                onClick = onOpenSourcesCatalog,
+                                modifier = Modifier.testTag("header_sources_catalog_button")
                             ) {
                                 Icon(
-                                    imageVector = Icons.Outlined.FolderZip,
-                                    contentDescription = stringResource(R.string.import_cbz_content_desc),
-                                    modifier = Modifier.size(18.dp)
+                                    imageVector = Icons.Outlined.Language,
+                                    contentDescription = stringResource(R.string.open_sources_catalog_button)
                                 )
-                                Spacer(modifier = Modifier.width(5.dp))
-                                Text(text = stringResource(R.string.import_cbz_button), maxLines = 1)
                             }
 
                             FilledTonalIconButton(
@@ -218,22 +189,6 @@ fun ExploreScreen(
                             }
                         }
                     )
-
-                    if (uiState.isImportingCbz) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LinearProgressIndicator(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(CircleShape)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = stringResource(R.string.importing_cbz_message),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -276,7 +231,7 @@ fun ExploreScreen(
                             .testTag("explore_search_input")
                     )
 
-                    // Active Sources & Custom Sites Selector Strip
+                    // Active Sources, Favicons & Built-in Sources Catalog Strip
                     if (prefs.showExploreSourcesBar) {
                         Spacer(modifier = Modifier.height(12.dp))
                         LazyRow(
@@ -301,6 +256,12 @@ fun ExploreScreen(
                                     shapes = ToggleButtonDefaults.shapes(),
                                     modifier = Modifier.testTag("source_chip_mangadex")
                                 ) {
+                                    SourceFaviconBadge(
+                                        name = "MangaDex",
+                                        baseUrl = "https://mangadex.org",
+                                        size = 18.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text("MangaDex")
                                 }
                             }
@@ -312,6 +273,12 @@ fun ExploreScreen(
                                         shapes = ToggleButtonDefaults.shapes(),
                                         modifier = Modifier.testTag("source_chip_kitsu")
                                     ) {
+                                        SourceFaviconBadge(
+                                            name = "Kitsu",
+                                            baseUrl = "https://kitsu.io",
+                                            size = 18.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
                                         Text("Kitsu")
                                     }
                                 }
@@ -324,7 +291,30 @@ fun ExploreScreen(
                                     shapes = ToggleButtonDefaults.shapes(),
                                     modifier = Modifier.testTag("source_chip_custom_${src.id}")
                                 ) {
+                                    SourceFaviconBadge(
+                                        name = src.name,
+                                        baseUrl = src.baseUrl,
+                                        explicitFaviconUrl = src.faviconUrl,
+                                        size = 18.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(src.name)
+                                }
+                            }
+                            item {
+                                OutlinedToggleButton(
+                                    checked = false,
+                                    onCheckedChange = { onOpenSourcesCatalog() },
+                                    shapes = ToggleButtonDefaults.shapes(),
+                                    modifier = Modifier.testTag("explore_open_sources_catalog_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Language,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(stringResource(R.string.open_sources_catalog_button))
                                 }
                             }
                             item {
@@ -370,7 +360,7 @@ fun ExploreScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Distinct Language Row & Sort Row (Fixing previous jumbled row)
+                    // Distinct Sort & Language Row
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -454,7 +444,7 @@ fun ExploreScreen(
                 }
             }
 
-            // Imported Local CBZ Section (Customizable visibility)
+            // Imported Local CBZ Section (when local works exist and section is enabled)
             if (prefs.showExploreLocalSection && localMangas.isNotEmpty() && uiState.searchQuery.isBlank()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -551,8 +541,8 @@ fun ExploreScreen(
                             icon = Icons.Outlined.Explore,
                             title = stringResource(R.string.explore_empty_title),
                             subtitle = stringResource(R.string.explore_empty_subtitle),
-                            actionLabel = stringResource(R.string.add_source_button),
-                            onActionClick = { showAddSourceDialog = true },
+                            actionLabel = stringResource(R.string.open_sources_catalog_button),
+                            onActionClick = onOpenSourcesCatalog,
                             testTagName = "explore_empty_state"
                         )
                     }

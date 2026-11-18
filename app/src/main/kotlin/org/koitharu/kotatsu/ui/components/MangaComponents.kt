@@ -83,10 +83,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
 import org.koitharu.kotatsu.R
+import org.koitharu.kotatsu.data.remote.SourceCatalogDirectory
+import org.koitharu.kotatsu.domain.model.CoverCornerStyle
 import org.koitharu.kotatsu.domain.model.CustomMangaSource
 import org.koitharu.kotatsu.domain.model.FavoriteCategory
 import org.koitharu.kotatsu.domain.model.MangaItem
 import org.koitharu.kotatsu.domain.model.MangaSourceType
+import org.koitharu.kotatsu.ui.theme.LocalCoverVisualConfig
 
 /**
  * Balanced Material 3 Expressive Page Header.
@@ -211,11 +214,17 @@ fun MangaCoverCard(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
+    val coverVisual = LocalCoverVisualConfig.current
+    val baseRadius = when (coverVisual.cornerStyle) {
+        CoverCornerStyle.EXPRESSIVE -> 24.dp
+        CoverCornerStyle.SOFT -> 14.dp
+        CoverCornerStyle.SHARP -> 6.dp
+    }
     val cornerRadius by animateDpAsState(
         targetValue = when {
-            isSelected -> 18.dp
-            isPressed -> 12.dp
-            else -> 24.dp
+            isSelected -> (baseRadius - 4.dp).coerceAtLeast(6.dp)
+            isPressed -> (baseRadius - 8.dp).coerceAtLeast(4.dp)
+            else -> baseRadius
         },
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "cardCornerMorph"
@@ -364,7 +373,7 @@ fun MangaCoverCard(
                             )
                         }
                     }
-                } else if (newChaptersCount > 0 || unreadCount > 0) {
+                } else if (coverVisual.showUnreadBadges && (newChaptersCount > 0 || unreadCount > 0)) {
                     Column(
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -408,7 +417,7 @@ fun MangaCoverCard(
                     }
                 }
 
-                if (progressFraction != null && progressFraction > 0f) {
+                if (coverVisual.showProgressBars && progressFraction != null && progressFraction > 0f) {
                     LinearProgressIndicator(
                         progress = { progressFraction },
                         color = MaterialTheme.colorScheme.primary,
@@ -1164,3 +1173,61 @@ fun CategorySelectBottomSheet(
         }
     }
 }
+
+@Composable
+fun SourceFaviconBadge(
+    name: String,
+    baseUrl: String,
+    explicitFaviconUrl: String = "",
+    size: androidx.compose.ui.unit.Dp = 42.dp,
+    modifier: Modifier = Modifier
+) {
+    val cookieShape = MaterialShapes.Cookie9Sided.toShape()
+    val resolvedModel = remember(explicitFaviconUrl, baseUrl) {
+        explicitFaviconUrl.takeIf { it.isNotBlank() }
+            ?: SourceCatalogDirectory.defaultFaviconUrl(baseUrl)
+    }
+    val monogram = remember(name) {
+        name.trim().take(2).uppercase().ifBlank { "W" }
+    }
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(size)
+            .clip(cookieShape)
+            .background(MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        if (resolvedModel.isNotBlank()) {
+            SubcomposeAsyncImage(
+                model = resolvedModel,
+                contentDescription = name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(size * 0.62f)
+                    .clip(CircleShape),
+                loading = {
+                    Text(
+                        text = monogram,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                },
+                error = {
+                    Text(
+                        text = monogram,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            )
+        } else {
+            Text(
+                text = monogram,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+    }
+}
+

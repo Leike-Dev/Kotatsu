@@ -16,6 +16,34 @@ enum class AppThemeMode {
     SYSTEM
 }
 
+enum class AppColorPalette {
+    KOTATSU_VERMILION,
+    SAKURA_CRIMSON,
+    OCEAN_SAPPHIRE,
+    EMERALD_JADE,
+    ROYAL_AMETHYST,
+    SOLAR_AMBER
+}
+
+enum class CoverCornerStyle {
+    EXPRESSIVE,
+    SOFT,
+    SHARP
+}
+
+enum class NavLabelBehavior {
+    SELECTED_ONLY,
+    ALWAYS,
+    HIDDEN
+}
+
+enum class DefaultStartTab {
+    EXPLORE,
+    FAVORITES,
+    HISTORY,
+    BOOKMARKS
+}
+
 enum class ExploreLayoutMode {
     GRID_STANDARD,
     GRID_COMPACT,
@@ -84,6 +112,24 @@ enum class FavoritesSortMode {
     MOST_UNREAD
 }
 
+enum class SourceHealthState {
+    UNTESTED,
+    TESTING,
+    ONLINE,
+    CLOUDFLARE_PROTECTED,
+    ERROR
+}
+
+data class SourceHealthCheckResult(
+    val state: SourceHealthState,
+    val httpCode: Int = 0,
+    val latencyMs: Long = 0L,
+    val detectedTitle: String = "",
+    val resolvedFaviconUrl: String = "",
+    val sampleWorksCount: Int = 0,
+    val message: String = ""
+)
+
 @Serializable
 data class MangaTag(
     val id: String,
@@ -96,7 +142,10 @@ data class CustomMangaSource(
     val name: String,
     val baseUrl: String,
     val searchUrlTemplate: String = "",
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    val faviconUrl: String = "",
+    val languageCode: String = "ALL",
+    val catalogType: String = "WEB"
 )
 
 data class MangaItem(
@@ -250,11 +299,17 @@ data class ReadingAnalytics(
 }
 
 data class AppPreferences(
-    // Appearance
+    // Appearance & Personalization
     val themeMode: AppThemeMode = AppThemeMode.DARK,
+    val colorPalette: AppColorPalette = AppColorPalette.KOTATSU_VERMILION,
     val amoledDark: Boolean = false,
     val dynamicColors: Boolean = false,
+    val coverCornerStyle: CoverCornerStyle = CoverCornerStyle.EXPRESSIVE,
+    val navLabelBehavior: NavLabelBehavior = NavLabelBehavior.SELECTED_ONLY,
+    val defaultStartTab: DefaultStartTab = DefaultStartTab.EXPLORE,
     val showSourceBadges: Boolean = true,
+    val showUnreadBadgesOnCovers: Boolean = true,
+    val showProgressOnCovers: Boolean = true,
 
     // Explore / Descobrir Customization
     val exploreLayoutMode: ExploreLayoutMode = ExploreLayoutMode.GRID_STANDARD,
